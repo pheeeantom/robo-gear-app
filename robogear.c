@@ -1143,7 +1143,7 @@ Content-type: text/html\r\n\
             for (int i = 0; i < 3; i++) {
                 speed[i] = atoi(dist1[i]);
             }
-            if (levelAfter != 3) {
+            if (levelAfter < 3 && levelAfter >= 0) {
                 machines[atoi(i)].speed = speed[levelAfter];
             }
 
