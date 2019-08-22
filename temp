@@ -1,0 +1,38 @@
+var strength = document.querySelector(\'.strength\');\r\n\
+    for (int i = 0; i < strength.length; i++) {\r\n\
+        strength[i].children[0].addEventListener(\"click\", plusStrength);\r\n\
+    }\r\n\
+    for (int i = 0; i < strength.length; i++) {\r\n\
+        strength[i].children[1].addEventListener(\"click\", minusStrength);\r\n\
+    }\r\n\
+    var ammunition = document.querySelector(\'.ammunition\');\r\n\
+    for (int i = 0; i < ammunition.length; i++) {\r\n\
+        ammunition[i].children[0].addEventListener(\"click\", plusAmmunition);\r\n\
+    }\r\n\
+    for (int i = 0; i < ammunition.length; i++) {\r\n\
+        ammunition[i].children[1].addEventListener(\"click\", minusAmmunition);\r\n\
+    }\r\n\
+    function plusStrength() {\r\n\
+        var xhr = new XMLHttpRequest();\r\n\
+        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+        xhr.send(\"plusstrength=\" + this.parentNode.parentNode.id + \";\");\r\n\
+        xhrSend(\"editvalues;\");\r\n\
+    }\r\n\
+    function minusStrength() {\r\n\
+        var xhr = new XMLHttpRequest();\r\n\
+        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+        xhr.send(\"minusstrength=\" + this.parentNode.parentNode.id + \";\");\r\n\
+        xhrSend(\"editvalues;\");\r\n\
+    }\r\n\
+    function plusAmmunition() {\r\n\
+        var xhr = new XMLHttpRequest();\r\n\
+        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+        xhr.send(\"plusammunition=\" + this.parentNode.parentNode.id + \";\");\r\n\
+        xhrSend(\"editvalues;\");\r\n\
+    }\r\n\
+    function minusAmmunition() {\r\n\
+        var xhr = new XMLHttpRequest();\r\n\
+        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+        xhr.send(\"minusammunition=\" + this.parentNode.parentNode.id + \";\");\r\n\
+        xhrSend(\"editvalues;\");\r\n\
+    }\r\n\

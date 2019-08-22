@@ -24,6 +24,19 @@ typedef struct machine {
     int speed;
 } machine;
 
+void readStrengthDamageSpeed(char * distance, char dist[3][5]) {
+    int u = strchr(distance, '-') - distance;
+    strncpy(dist[0], distance, u);
+    dist[0][u] = '\0';
+    u++;
+    strncpy(dist[1], distance + u, strchr(distance + u, '-') - distance - u);
+    dist[1][strchr(distance + u, '-') - distance - u] = '\0';
+    u += strchr(distance + u, '-') - distance - u;
+    u++;
+    strncpy(dist[2], distance + u, strchr(distance + u, '\0') - distance - u);
+    dist[2][strchr(distance + u, '\0') - distance - u] = '\0';
+}
+
 void do_exit(PGconn *conn) {
     PQfinish(conn);
     exit(1);
@@ -66,7 +79,7 @@ void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset) {
             //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
             //FCGX_PutS(PQgetvalue(res, i, 11), request.out);
             //FCGX_PutS("\" width=\"100\" height=\"100\" alt=\"error\">", request.out);
-            FCGX_PutS("<img src=\"http://localhost/", request.out);
+            FCGX_PutS("<img title=\"test\" src=\"http://localhost/", request.out);
             FCGX_PutS(PQgetvalue(res, counter, 11), request.out);
             FCGX_PutS("\" width=\"133\" height=\"143\" alt=\"error\">", request.out);
             FCGX_PutS("</td>", request.out);
@@ -175,7 +188,7 @@ void printAllWarMachines(PGconn *conn, FCGX_Request request, char* offset) {
     PQclear(res);
 }
 
-void printObjectsMachines(PGconn *conn, FCGX_Request request, machine * machines) {
+void printObjectsMachines(PGconn *conn, FCGX_Request request, machine * machines, int hasPlusMinus) {
     int nrows = 0;
     for (int i = 0; i < 20; i++) {
         if (machines[i].id != 0) {
@@ -215,6 +228,14 @@ void printObjectsMachines(PGconn *conn, FCGX_Request request, machine * machines
             FCGX_PutS("<img src=\"http://localhost/", request.out);
             FCGX_PutS(PQgetvalue(res, 0, 9), request.out);
             FCGX_PutS("\" width=\"266\" height=\"200\" alt=\"error\">", request.out);
+            if (hasPlusMinus) {
+                FCGX_PutS("\
+<br>\r\n\
+<div class=\"strength\">Прочность<button class=\"plus\">+</button><button class=\"minus\">-</button></div>\r\n\
+<br>\r\n\
+<div class=\"ammunition\">Боезапас<button class=\"plus\">+</button><button class=\"minus\">-</button></div>\r\n\
+                ", request.out);
+            }
             FCGX_PutS("</td>", request.out);
             PQclear(res);
         }
@@ -364,7 +385,7 @@ Content-type: text/html\r\n\
             ", request.out);
             printAllInfantry(conn, request, "0");
             FCGX_PutS("<hr align=\"center\" width=\"400\" size=\"5\" color=\"Black\" />\r\n", request.out);
-            printObjectsMachines(conn, request, machines);
+            printObjectsMachines(conn, request, machines, 0);
             FCGX_PutS("\
 <script>\r\n\
 function xhrSend (s) {\r\n\
@@ -611,16 +632,7 @@ Content-type: text/html\r\n\
                 indexDistance[strchr(buf, ';') - strchr(buf, '=') - 1] = '\0';
                 int iindexDistance = atoi(indexDistance);
                 char dist[3][5];
-                int u = strchr(distance, '-') - distance;
-                strncpy(dist[0], distance, u);
-                dist[0][u] = '\0';
-                u++;
-                strncpy(dist[1], distance + u, strchr(distance + u, '-') - distance - u);
-                dist[1][strchr(distance + u, '-') - distance - u] = '\0';
-                u += strchr(distance + u, '-') - distance - u;
-                u++;
-                strncpy(dist[2], distance + u, strchr(distance + u, '\0') - distance - u);
-                dist[2][strchr(distance + u, '\0') - distance - u] = '\0';
+                readStrengthDamageSpeed(distance, dist);
                 damage = atoi(dist[iindexDistance]);
                 PQclear(res3);
                 free(query3);
@@ -691,8 +703,90 @@ Content-type: text/html\r\n\
 </p>\r\n\
                 ", request.out);
                 if (isKilled) {
+                    char * query = malloc(300);
+                    strcpy(query, "select*from warmachine where id=");
+                    char * reqId = malloc(5);
+                    sprintf(reqId, "%d", machines[atoi(idTarget + 3)].id);
+                    strcat(query, reqId);
+                    strcat(query, ";");
+                    PGresult *res = PQexec(conn, query);
+                    char * distance = malloc(10);
+                    strcpy(distance, PQgetvalue(res, 0, 7));
+                    free(query);
+                    int temp = machines[atoi(idTarget + 3)].strength;
                     machines[atoi(idTarget + 3)].strength -= damage;
                     FCGX_PutS("<p style=\"text-align: center;\">Броня пробита</p>", request.out);
+                    char dist[3][5];
+                    int strength[3];
+                    readStrengthDamageSpeed(distance, dist);
+                    for (int i = 0; i < 3; i++) {
+                        strength[i] = atoi(dist[i]);
+                    }
+                    int levelBefore;
+                    int levelAfter;
+                    if (machines[atoi(idTarget + 3)].strength <= strength[0] && machines[atoi(idTarget + 3)].strength > strength[1]) {
+                        levelAfter = 0;
+                    }
+                    else if (machines[atoi(idTarget + 3)].strength <= strength[1] && machines[atoi(idTarget + 3)].strength > strength[2]) {
+                        levelAfter = 1;
+                    }
+                    else if (machines[atoi(idTarget + 3)].strength <= strength[2] && machines[atoi(idTarget + 3)].strength > 0) {
+                        levelAfter = 2;
+                    }
+                    else if (machines[atoi(idTarget + 3)].strength <= 0) {
+                        levelAfter = 3;
+                    }
+                    query = malloc(300);
+                    strcpy(query, "select*from warmachine where id=");
+                    strcat(query, reqId);
+                    strcat(query, ";");
+                    res = PQexec(conn, query);
+                    free(distance);
+                    distance = malloc(10);
+                    strcpy(distance, PQgetvalue(res, 0, 8));
+                    free(query);
+                    char dist1[3][5];
+                    int speed[3];
+                    readStrengthDamageSpeed(distance, dist1);
+                    for (int i = 0; i < 3; i++) {
+                        speed[i] = atoi(dist1[i]);
+                    }
+                    if (levelAfter != 3) {
+                        machines[atoi(idTarget + 3)].speed = speed[levelAfter];
+                    }
+                    if (temp <= strength[0] && temp > strength[1]) {
+                        levelBefore = 0;
+                    }
+                    else if (temp <= strength[1] && temp > strength[2]) {
+                        levelBefore = 1;
+                    }
+                    else if (temp <= strength[2] && temp > 0) {
+                        levelBefore = 2;
+                    }
+                    else if (temp <= 0) {
+                        levelBefore = 3;
+                    }
+                    int numOfDice = levelAfter - levelBefore;
+                    FCGX_PutS("\
+<p style=\"text-align: center;\">Значения бросков теста на смерть пилота: \r\n\
+                    ", request.out);
+                    int isPilotKilled = 0;
+                    for (int i = 0; i < numOfDice; i++) {
+                        char* str = malloc(5);
+                        int val = 1 + rand()%6;
+                        if (val > 4) {
+                            isPilotKilled = 1;
+                        }
+                        sprintf(str, "%d", val);
+                        FCGX_PutS(str, request.out);
+                        FCGX_PutS(" ", request.out);
+                    }
+                    FCGX_PutS("\
+</p>\r\n\
+                    ", request.out);
+                    if (isPilotKilled) {
+                        FCGX_PutS("<p style=\"text-align: center;\">Пилот убит</p>", request.out);
+                    }
                     if (machines[atoi(idTarget + 3)].strength <= 0) {
                         machines[atoi(idTarget + 3)].id = 0;
                         FCGX_PutS("<p style=\"text-align: center;\">Машина уничтожена</p>", request.out);
@@ -724,17 +818,69 @@ Content-type: text/html\r\n\
     document.getElementById(\'ok\').addEventListener(\"click\", okButtonListener);\r\n\
     document.getElementsByTagName(\'body\')[0].addEventListener(\"keypress\", menuKeyListener);\r\n\
     function okButtonListener() {\r\n\
-        xhrSend(\"menu\");\r\n\
+        xhrSend(\"testshot:ammunition;\");\r\n\
     }\r\n\
     function menuKeyListener(e) {\r\n\
         if (e.keyCode == 13) {\r\n\
-            xhrSend(\"menu\");\r\n\
+            xhrSend(\"testshot:ammunition;\");\r\n\
         }\r\n\
     }\r\n\
 </script>\r\n\
 </body>\r\n\
 </html>\r\n\
             ", request.out);
+        }
+        else if (strstr(buf, "testshot:ammunition")) {
+            FCGX_PutS("\
+Content-type: text/html\r\n\
+\r\n\
+<html>\r\n\
+<head>\r\n\
+<meta charset=\"utf-8\">\r\n\
+<title>Бронепехота</title>\r\n\
+</head>\r\n\
+<body>\r\n\
+<p style=\"text-align: center;\">Выберите стреляющую машину</p>\r\n\
+            ", request.out);
+            printObjectsMachines(conn, request, machines, 0);
+            FCGX_PutS("\
+<script>\r\n\
+function xhrSend (s) {\r\n\
+    var xhr = new XMLHttpRequest();\r\n\
+    xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+    xhr.send(s);\r\n\
+    xhr.onreadystatechange = function() {\r\n\
+        if (xhr.readyState == XMLHttpRequest.DONE) {\r\n\
+            document.open();\r\n\
+            document.write(xhr.responseText);\r\n\
+            document.close();\r\n\
+        }\r\n\
+    }\r\n\
+}\r\n\
+var tds = document.getElementsByTagName(\'td\');\r\n\
+for (var i = 0; i < tds.length; i++) {\r\n\
+    tds[i].addEventListener(\"click\", tdListener);\r\n\
+}\r\n\
+function tdListener() {\r\n\
+    var req = \"machinesammunition=\" + this.id + \";\";\r\n\
+    var xhr = new XMLHttpRequest();\r\n\
+    xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+    xhr.send(req);\r\n\
+    xhrSend(\"menu\");\r\n\
+}\r\n\
+</script>\r\n\
+</body>\r\n\
+</html>\r\n\
+            ", request.out);
+        }
+        else if (strstr(buf, "machinesammunition")) {
+            char * num = malloc(5);
+            strncpy(num, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
+            num[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
+            machines[atoi(num)].ammunition -= 1;
+            for (int i = 0; i < 20; i++) {
+                printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
+            }
         }
         else if (strstr(buf, "setmachines")) {
             FCGX_PutS("\
@@ -850,6 +996,271 @@ function clickButton() {\r\n\
                 printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
             }
         }
+        else if (strstr(buf, "editvalues")) {
+            FCGX_PutS("\
+Content-type: text/html\r\n\
+\r\n\
+<html>\r\n\
+<head>\r\n\
+<meta charset=\"utf-8\">\r\n\
+<title>Бронепехота</title>\r\n\
+</head>\r\n\
+<body>\r\n\
+            ", request.out);
+            printObjectsMachines(conn, request, machines, 1);
+            FCGX_PutS("\
+<div style=\"text-align: center;\"><button id=\"menu\">Ок</button></div>\r\n\
+<script>\r\n\
+    function xhrSend (s) {\r\n\
+        var xhr = new XMLHttpRequest();\r\n\
+        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+        xhr.send(s);\r\n\
+        xhr.onreadystatechange = function() {\r\n\
+            if (xhr.readyState == XMLHttpRequest.DONE) {\r\n\
+                document.open();\r\n\
+                document.write(xhr.responseText);\r\n\
+                document.close();\r\n\
+            }\r\n\
+        }\r\n\
+    }\r\n\
+    document.getElementById(\'menu\').addEventListener(\"click\", backToMenu);\r\n\
+    var strength = document.getElementsByClassName(\'strength\');\r\n\
+    for (var i = 0; i < strength.length; i++) {\r\n\
+        strength[i].children[0].addEventListener(\"click\", plusStrength);\r\n\
+    }\r\n\
+    for (var i = 0; i < strength.length; i++) {\r\n\
+        strength[i].children[1].addEventListener(\"click\", minusStrength);\r\n\
+    }\r\n\
+    var ammunition = document.getElementsByClassName(\'ammunition\');\r\n\
+    for (var i = 0; i < ammunition.length; i++) {\r\n\
+        ammunition[i].children[0].addEventListener(\"click\", plusAmmunition);\r\n\
+    }\r\n\
+    for (var i = 0; i < ammunition.length; i++) {\r\n\
+        ammunition[i].children[1].addEventListener(\"click\", minusAmmunition);\r\n\
+    }\r\n\
+    function plusStrength() {\r\n\
+        var xhr = new XMLHttpRequest();\r\n\
+        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+        xhr.send(\"plusstrength=\" + this.parentNode.parentNode.id + \";\");\r\n\
+        xhrSend(\"editvalues;\");\r\n\
+    }\r\n\
+    function minusStrength() {\r\n\
+        var xhr = new XMLHttpRequest();\r\n\
+        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+        xhr.send(\"minusstrength=\" + this.parentNode.parentNode.id + \";\");\r\n\
+        xhrSend(\"editvalues;\");\r\n\
+    }\r\n\
+    function plusAmmunition() {\r\n\
+        var xhr = new XMLHttpRequest();\r\n\
+        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+        xhr.send(\"plusammunition=\" + this.parentNode.parentNode.id + \";\");\r\n\
+        xhrSend(\"editvalues;\");\r\n\
+    }\r\n\
+    function minusAmmunition() {\r\n\
+        var xhr = new XMLHttpRequest();\r\n\
+        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+        xhr.send(\"minusammunition=\" + this.parentNode.parentNode.id + \";\");\r\n\
+        xhrSend(\"editvalues;\");\r\n\
+    }\r\n\
+    function backToMenu() {\r\n\
+        xhrSend(\"menu\");\r\n\
+        //var strength = document.getElementsByClassName(\'strength\');\r\n\
+        //var ammunition = document.getElementsByClassName(\'ammunition\');\r\n\
+        //var req = \"updatevalues:\";\r\n\
+        //for (var i = 0; i < inputs.length; i++) {\r\n\
+        //    if (i != inputs.length - 1) {\r\n\
+        //        req += inputs[i].parentNode.id + \"=\" + inputs[i].value + \",\";\r\n\
+        //    }\r\n\
+        //    else {\r\n\
+        //        req += inputs[i].parentNode.id + \"=\" + inputs[i].value + \";\";\r\n\
+        //    }\r\n\
+        //}\r\n\
+        //var xhr = new XMLHttpRequest();\r\n\
+        //xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+        //xhr.send(req);\r\n\
+    }\r\n\
+</script>\r\n\
+</body>\r\n\
+</html>\r\n\
+            ", request.out);
+        }
+        else if (strstr(buf, "plusstrength")) {
+            char * i = malloc(5);
+            strncpy(i, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
+            i[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
+            machines[atoi(i)].strength += 1;
+
+
+
+            char * query = malloc(300);
+            strcpy(query, "select*from warmachine where id=");
+            char * reqId = malloc(5);
+            sprintf(reqId, "%d", machines[atoi(i)].id);
+            strcat(query, reqId);
+            strcat(query, ";");
+            PGresult *res = PQexec(conn, query);
+            char * distance = malloc(10);
+            strcpy(distance, PQgetvalue(res, 0, 7));
+            free(query);
+
+
+
+            char dist[3][5];
+            int strength[3];
+            readStrengthDamageSpeed(distance, dist);
+            for (int i = 0; i < 3; i++) {
+                strength[i] = atoi(dist[i]);
+            }
+            int levelBefore;
+            int levelAfter = 1000;
+            if (machines[atoi(i)].strength <= strength[0] && machines[atoi(i)].strength > strength[1]) {
+                levelAfter = 0;
+            }
+            else if (machines[atoi(i)].strength <= strength[1] && machines[atoi(i)].strength > strength[2]) {
+                levelAfter = 1;
+            }
+            else if (machines[atoi(i)].strength <= strength[2] && machines[atoi(i)].strength > 0) {
+                levelAfter = 2;
+            }
+            else if (machines[atoi(i)].strength <= 0) {
+                levelAfter = 3;
+            }
+            if (levelAfter == 1000) {
+                machines[atoi(i)].strength -= 1;
+            }
+            query = malloc(300);
+            strcpy(query, "select*from warmachine where id=");
+            strcat(query, reqId);
+            strcat(query, ";");
+            res = PQexec(conn, query);
+            free(distance);
+            distance = malloc(10);
+            strcpy(distance, PQgetvalue(res, 0, 8));
+            free(query);
+            char dist1[3][5];
+            int speed[3];
+            readStrengthDamageSpeed(distance, dist1);
+            for (int i = 0; i < 3; i++) {
+                speed[i] = atoi(dist1[i]);
+            }
+            if (levelAfter != 3) {
+                machines[atoi(i)].speed = speed[levelAfter];
+            }
+
+
+
+
+
+            for (int i = 0; i < 20; i++) {
+                printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
+            }
+        }
+        else if (strstr(buf, "minusstrength")) {
+            char * i = malloc(5);
+            strncpy(i, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
+            i[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
+            machines[atoi(i)].strength -= 1;
+
+
+
+
+            char * query = malloc(300);
+            strcpy(query, "select*from warmachine where id=");
+            char * reqId = malloc(5);
+            sprintf(reqId, "%d", machines[atoi(i)].id);
+            strcat(query, reqId);
+            strcat(query, ";");
+            PGresult *res = PQexec(conn, query);
+            char * distance = malloc(10);
+            strcpy(distance, PQgetvalue(res, 0, 7));
+            free(query);
+
+
+
+            char dist[3][5];
+            int strength[3];
+            readStrengthDamageSpeed(distance, dist);
+            for (int i = 0; i < 3; i++) {
+                strength[i] = atoi(dist[i]);
+            }
+            int levelBefore;
+            int levelAfter;
+            if (machines[atoi(i)].strength <= strength[0] && machines[atoi(i)].strength > strength[1]) {
+                levelAfter = 0;
+            }
+            else if (machines[atoi(i)].strength <= strength[1] && machines[atoi(i)].strength > strength[2]) {
+                levelAfter = 1;
+            }
+            else if (machines[atoi(i)].strength <= strength[2] && machines[atoi(i)].strength > 0) {
+                levelAfter = 2;
+            }
+            else if (machines[atoi(i)].strength <= 0) {
+                levelAfter = 3;
+            }
+            if (levelAfter == 3) {
+                machines[atoi(i)].id = 0;
+            }
+            query = malloc(300);
+            strcpy(query, "select*from warmachine where id=");
+            strcat(query, reqId);
+            strcat(query, ";");
+            res = PQexec(conn, query);
+            free(distance);
+            distance = malloc(10);
+            strcpy(distance, PQgetvalue(res, 0, 8));
+            free(query);
+            char dist1[3][5];
+            int speed[3];
+            readStrengthDamageSpeed(distance, dist1);
+            for (int i = 0; i < 3; i++) {
+                speed[i] = atoi(dist1[i]);
+            }
+            if (levelAfter != 3) {
+                machines[atoi(i)].speed = speed[levelAfter];
+            }
+
+
+
+
+            for (int i = 0; i < 20; i++) {
+                printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
+            }
+        }
+        else if (strstr(buf, "plusammunition")) {
+            char * i = malloc(5);
+            strncpy(i, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
+            i[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
+            machines[atoi(i)].ammunition += 1;
+            char * query = malloc(100);
+            strcpy(query, "select * from warmachine where id=");
+            char * id = malloc(5);
+            sprintf(id, "%d", machines[atoi(i)].id);
+            strcat(query, id);
+            strcat(query, ";");
+            PGresult *res = PQexec(conn, query);
+            char * ammunition = PQgetvalue(res, 0, 6);
+            int iammunition = atoi(ammunition);
+            if (machines[atoi(i)].ammunition > iammunition) {
+                machines[atoi(i)].ammunition -= 1;
+            }
+            PQclear(res);
+            free(query);
+            for (int i = 0; i < 20; i++) {
+                printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
+            }
+        }
+        else if (strstr(buf, "minusammunition")) {
+            char * i = malloc(5);
+            strncpy(i, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
+            i[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
+            machines[atoi(i)].ammunition -= 1;
+            if (machines[atoi(i)].ammunition < 0) {
+                machines[atoi(i)].ammunition = 0;
+            }
+            for (int i = 0; i < 20; i++) {
+                printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
+            }
+        }
         else {
             FCGX_PutS("\
 Content-type: text/html\r\n\
@@ -863,6 +1274,8 @@ Content-type: text/html\r\n\
 <div style=\"text-align: center;\"><button id=\"testshot\">Тест на выстрел</button></div>\r\n\
 <br>\r\n\
 <div style=\"text-align: center;\"><button id=\"setmachines\">Создать технику</button></div>\r\n\
+<br>\r\n\
+<div style=\"text-align: center;\"><button id=\"editvalues\">Отредактировать боезапас или прочность</button></div>\r\n\
 <script>\r\n\
     function xhrSend (s) {\r\n\
         var xhr = new XMLHttpRequest();\r\n\
@@ -878,11 +1291,15 @@ Content-type: text/html\r\n\
     }\r\n\
     document.getElementById(\'testshot\').addEventListener(\"click\", testshotButtonListener);\r\n\
     document.getElementById(\'setmachines\').addEventListener(\"click\", setmachinesButtonListener);\r\n\
+    document.getElementById(\'editvalues\').addEventListener(\"click\", editvaluesButtonListener);\r\n\
     function testshotButtonListener() {\r\n\
         xhrSend(\"testshot:chooseattacker;\");\r\n\
     }\r\n\
     function setmachinesButtonListener() {\r\n\
         xhrSend(\"setmachines;\");\r\n\
+    }\r\n\
+    function editvaluesButtonListener() {\r\n\
+        xhrSend(\"editvalues;\");\r\n\
     }\r\n\
 </script>\r\n\
 </body>\r\n\
