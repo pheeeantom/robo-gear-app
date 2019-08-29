@@ -9,7 +9,9 @@
 
 #define SOCKET_PATH "127.0.0.1:9000"
 #define LIMIT "1000"
-#define SIZEROW 3
+#define SIZEROW 6
+#define SIZEROWLRW 3
+#define SIZEROWMACHINE 6
 
 //хранит дескриптор открытого сокета 
 //ОСВОБОЖДАТЬ ПАМЯТЬ ИЗ-ЗА ЭТОГО МОЖЕТ БЫТЬ ОШИБКА SEGMENTATION FAULT (CORE DUMPED)
@@ -23,6 +25,11 @@ typedef struct machine {
     int ammunition;
     int speed;
 } machine;
+
+machine * machines;
+
+int firstTime = 1;
+int isEmptyMachines = 1;
 
 void readStrengthDamageSpeed(char * distance, char dist[3][5]) {
     int u = strchr(distance, '-') - distance;
@@ -79,7 +86,13 @@ void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset) {
             //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
             //FCGX_PutS(PQgetvalue(res, i, 11), request.out);
             //FCGX_PutS("\" width=\"100\" height=\"100\" alt=\"error\">", request.out);
-            FCGX_PutS("<img title=\"test\" src=\"http://localhost/", request.out);
+            FCGX_PutS("<img title=\"Дальн=", request.out);
+            FCGX_PutS(PQgetvalue(res, counter, 5), request.out);
+            FCGX_PutS(" Мощн=", request.out);
+            FCGX_PutS(PQgetvalue(res, counter, 6), request.out);
+            FCGX_PutS(" Бр=", request.out);
+            FCGX_PutS(PQgetvalue(res, counter, 9), request.out);
+            FCGX_PutS("\" src=\"http://localhost/", request.out);
             FCGX_PutS(PQgetvalue(res, counter, 11), request.out);
             FCGX_PutS("\" width=\"133\" height=\"143\" alt=\"error\">", request.out);
             FCGX_PutS("</td>", request.out);
@@ -105,20 +118,20 @@ void printAllLongRangeWeapons(PGconn *conn, FCGX_Request request, char* offset) 
     }
     int nrows = PQntuples(res);
     FCGX_PutS("<table border=\"0\" style=\"margin: auto;\">", request.out);
-    int t = nrows%SIZEROW;
+    int t = nrows%SIZEROWLRW;
     int p;
     int k;
     int counter = 0;
-    if (nrows%SIZEROW != 0) {
+    if (nrows%SIZEROWLRW != 0) {
         p = 1;
     }
     else {
         p = 0;
     }
-    for (int j = 0; j < nrows/SIZEROW + p; j++) {
+    for (int j = 0; j < nrows/SIZEROWLRW + p; j++) {
         FCGX_PutS("<tr>", request.out);
-        if (j == nrows/SIZEROW + p - 1 && t != 0) k = t;
-        else k = SIZEROW;
+        if (j == nrows/SIZEROWLRW + p - 1 && t != 0) k = t;
+        else k = SIZEROWLRW;
         int oldcounter = counter;
         for (; counter < oldcounter + k; counter++) {
             FCGX_PutS("<td id=\"lrw", request.out);
@@ -127,7 +140,9 @@ void printAllLongRangeWeapons(PGconn *conn, FCGX_Request request, char* offset) 
             //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
             //FCGX_PutS(PQgetvalue(res, i, 11), request.out);
             //FCGX_PutS("\" width=\"100\" height=\"100\" alt=\"error\">", request.out);
-            FCGX_PutS("<img src=\"http://localhost/", request.out);
+            FCGX_PutS("<img title=\"Урон=", request.out);
+            FCGX_PutS(PQgetvalue(res, counter, 5), request.out);
+            FCGX_PutS("\" src=\"http://localhost/", request.out);
             FCGX_PutS(PQgetvalue(res, counter, 3), request.out);
             FCGX_PutS("\" width=\"200\" height=\"99\" alt=\"error\">", request.out);
             FCGX_PutS("</td>", request.out);
@@ -153,20 +168,20 @@ void printAllWarMachines(PGconn *conn, FCGX_Request request, char* offset) {
     }
     int nrows = PQntuples(res);
     FCGX_PutS("<table border=\"0\" style=\"margin: auto;\">", request.out);
-    int t = nrows%SIZEROW;
+    int t = nrows%SIZEROWMACHINE;
     int p;
     int k;
     int counter = 0;
-    if (nrows%SIZEROW != 0) {
+    if (nrows%SIZEROWMACHINE != 0) {
         p = 1;
     }
     else {
         p = 0;
     }
-    for (int j = 0; j < nrows/SIZEROW + p; j++) {
+    for (int j = 0; j < nrows/SIZEROWMACHINE + p; j++) {
         FCGX_PutS("<tr>", request.out);
-        if (j == nrows/SIZEROW + p - 1 && t != 0) k = t;
-        else k = SIZEROW;
+        if (j == nrows/SIZEROWMACHINE + p - 1 && t != 0) k = t;
+        else k = SIZEROWMACHINE;
         int oldcounter = counter;
         for (; counter < oldcounter + k; counter++) {
             FCGX_PutS("<td id=\"", request.out);
@@ -204,7 +219,7 @@ void printObjectsMachines(PGconn *conn, FCGX_Request request, machine * machines
                 continue;
             }
             row++;
-            if (row != 1 && row%SIZEROW == 1) {
+            if (row != 1 && row%SIZEROWMACHINE == 1) {
                 FCGX_PutS("</tr><tr>", request.out);
             }
             char * query = malloc(300);
@@ -225,7 +240,23 @@ void printObjectsMachines(PGconn *conn, FCGX_Request request, machine * machines
             sprintf(str, "%d", i);
             FCGX_PutS(str, request.out);
             FCGX_PutS("\">", request.out);
-            FCGX_PutS("<img src=\"http://localhost/", request.out);
+            FCGX_PutS("<img title=\"Скорострельность=", request.out);
+            FCGX_PutS(PQgetvalue(res, 0, 5), request.out);
+            FCGX_PutS(" Боезапас=", request.out);
+            char * ammo = malloc(5);
+            sprintf(ammo, "%d", machines[i].ammunition);
+            FCGX_PutS(ammo, request.out);
+            FCGX_PutS(" Прочность=", request.out);
+            FCGX_PutS(PQgetvalue(res, 0, 7), request.out);
+            FCGX_PutS(" Прочность=", request.out);
+            char * strength = malloc(5);
+            sprintf(strength, "%d", machines[i].strength);
+            FCGX_PutS(strength, request.out);
+            FCGX_PutS(" Скорость=", request.out);
+            char * speed = malloc(5);
+            sprintf(speed, "%d", machines[i].speed);
+            FCGX_PutS(speed, request.out);
+            FCGX_PutS("\" src=\"http://localhost/", request.out);
             FCGX_PutS(PQgetvalue(res, 0, 9), request.out);
             FCGX_PutS("\" width=\"266\" height=\"200\" alt=\"error\">", request.out);
             if (hasPlusMinus) {
@@ -242,6 +273,56 @@ void printObjectsMachines(PGconn *conn, FCGX_Request request, machine * machines
         FCGX_PutS("</tr>", request.out);
         FCGX_PutS("</table>\r\n", request.out);
     }
+}
+
+void printAllBlowUps(PGconn *conn, FCGX_Request request, char * offset) {
+    char * query = malloc(300);
+    strcpy(query, "select*from blowup offset ");
+    strcat(query, offset);
+    strcat(query, " limit ");
+    strcat(query, LIMIT);
+    strcat(query, ";");
+    PGresult *res = PQexec(conn, query);
+    if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+        printf("No data retrieved\n");        
+        PQclear(res);
+        do_exit(conn);
+    }
+    int nrows = PQntuples(res);
+    FCGX_PutS("<table border=\"0\" style=\"margin: auto;\">", request.out);
+    int t = nrows%SIZEROW;
+    int p;
+    int k;
+    int counter = 0;
+    if (nrows%SIZEROW != 0) {
+        p = 1;
+    }
+    else {
+        p = 0;
+    }
+    for (int j = 0; j < nrows/SIZEROW + p; j++) {
+        FCGX_PutS("<tr>", request.out);
+        if (j == nrows/SIZEROW + p - 1 && t != 0) k = t;
+        else k = SIZEROW;
+        int oldcounter = counter;
+        for (; counter < oldcounter + k; counter++) {
+            FCGX_PutS("<td id=\"blu", request.out);
+            FCGX_PutS(PQgetvalue(res, counter, 4), request.out);
+            FCGX_PutS("\">", request.out);
+            //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
+            //FCGX_PutS(PQgetvalue(res, i, 11), request.out);
+            //FCGX_PutS("\" width=\"100\" height=\"100\" alt=\"error\">", request.out);
+            FCGX_PutS("<img title=\"Урон=", request.out);
+            FCGX_PutS(PQgetvalue(res, counter, 2), request.out);
+            FCGX_PutS("\" src=\"http://localhost/", request.out);
+            FCGX_PutS(PQgetvalue(res, counter, 3), request.out);
+            FCGX_PutS("\" width=\"100\" height=\"100\" alt=\"error\">", request.out);
+            FCGX_PutS("</td>", request.out);
+        }
+        FCGX_PutS("</tr>", request.out);
+    }
+    FCGX_PutS("</table>\r\n", request.out);
+    PQclear(res);
 }
 
 int main(void) 
@@ -281,7 +362,7 @@ int main(void)
 
     idAttacker = malloc(10);
     idTarget = malloc(10);
-    machine * machines = malloc(20 * sizeof(machine));
+    machines = malloc(20 * sizeof(machine));
     for (int i = 0; i < 20; i++) {
         machines[i].id = 0;
     }
@@ -340,8 +421,12 @@ Content-type: text/html\r\n\
 <p style=\"text-align: center;\">Выберите атакующего</p>\r\n\
             ", request.out);
             printAllInfantry(conn, request, "0");
+            if (!isEmptyMachines) {
+                FCGX_PutS("<hr align=\"center\" width=\"400\" size=\"5\" color=\"Black\" />\r\n", request.out);
+                printAllLongRangeWeapons(conn, request, "0");
+            }
             FCGX_PutS("<hr align=\"center\" width=\"400\" size=\"5\" color=\"Black\" />\r\n", request.out);
-            printAllLongRangeWeapons(conn, request, "0");
+            printAllBlowUps(conn, request, "0");
             FCGX_PutS("\
 <script>\r\n\
 function xhrSend (s) {\r\n\
@@ -361,16 +446,102 @@ for (var i = 0; i < tds.length; i++) {\r\n\
     tds[i].addEventListener(\"click\", tdClickListener);\r\n\
 }\r\n\
 function tdClickListener() {\r\n\
-    xhrSend(\"testshot:choosetarget=\" + this.id + \";\");\r\n\
+    var req = \"setttacker=\" + this.id + \";\";\r\n\
+    var xhr = new XMLHttpRequest();\r\n\
+    xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+    xhr.send(req);\r\n\
+    if (this.id.includes(\"lrw\")) {\r\n\
+        xhrSend(\"testshot:ammunition;\");\r\n\
+    }\r\n\
+    else if (this.id.includes(\"inf\") || this.id.includes(\"blu\")) {\r\n\
+        xhrSend(\"testshot:choosetarget;\");\r\n\
+    }\r\n\
 }\r\n\
 </script>\r\n\
 </body>\r\n\
 </html>\r\n\
             ", request.out);
         }
-        else if (strstr(buf, "testshot:choosetarget")) {
+        else if (strstr(buf, "setttacker")) {
             strncpy(idAttacker, strchr(buf, '=') + 1, strchr(buf, ';') - strchr(buf, '=') - 1);
             idAttacker[strchr(buf, ';') - strchr(buf, '=') - 1] = '\0';
+            printf("idAttacker:%s", idAttacker);
+        }
+        else if (strstr(buf, "testshot:ammunition")) {
+            FCGX_PutS("\
+Content-type: text/html\r\n\
+\r\n\
+<html>\r\n\
+<head>\r\n\
+<meta charset=\"utf-8\">\r\n\
+<title>Бронепехота</title>\r\n\
+</head>\r\n\
+<body>\r\n\
+<p style=\"text-align: center;\">Выберите стреляющую машину</p>\r\n\
+            ", request.out);
+            printObjectsMachines(conn, request, machines, 0);
+            FCGX_PutS("\
+<script>\r\n\
+function xhrSend (s) {\r\n\
+    var xhr = new XMLHttpRequest();\r\n\
+    xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+    xhr.send(s);\r\n\
+    xhr.onreadystatechange = function() {\r\n\
+        if (xhr.readyState == XMLHttpRequest.DONE) {\r\n\
+            document.open();\r\n\
+            document.write(xhr.responseText);\r\n\
+            document.close();\r\n\
+        }\r\n\
+    }\r\n\
+}\r\n\
+var tds = document.getElementsByTagName(\'td\');\r\n\
+for (var i = 0; i < tds.length; i++) {\r\n\
+    tds[i].addEventListener(\"click\", tdListener);\r\n\
+}\r\n\
+function tdListener() {\r\n\
+    var req = \"machinesammunition=\" + this.id + \";\";\r\n\
+    var xhr = new XMLHttpRequest();\r\n\
+    xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+    xhr.send(req);\r\n\
+    xhr.onreadystatechange = function() {\r\n\
+        if (xhr.readyState == XMLHttpRequest.DONE) {\r\n\
+            if (xhr.responseText == \"ok\") {\r\n\
+                xhrSend(\"testshot:choosetarget;\");\r\n\
+            }\r\n\
+            else if (xhr.responseText == \"error\") {\r\n\
+                alert(\"Не хватает боезапаса!\");\r\n\
+                xhrSend(\"menu\");\r\n\
+            }\r\n\
+        }\r\n\
+    }\r\n\
+}\r\n\
+</script>\r\n\
+</body>\r\n\
+</html>\r\n\
+            ", request.out);
+        }
+        else if (strstr(buf, "machinesammunition")) {
+            char * num = malloc(5);
+            strncpy(num, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
+            num[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
+            if (machines[atoi(num)].ammunition > 0) {
+                machines[atoi(num)].ammunition -= 1;
+                FCGX_PutS("\
+Content-type: text/html\r\n\
+\r\n\
+ok", request.out);
+            }
+            else {
+                FCGX_PutS("\
+Content-type: text/html\r\n\
+\r\n\
+error", request.out);
+            }
+            for (int i = 0; i < 20; i++) {
+                printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
+            }
+        }
+        else if (strstr(buf, "testshot:choosetarget")) {
             //printf("%s", idAttacker);
             FCGX_PutS("\
 Content-type: text/html\r\n\
@@ -405,16 +576,34 @@ for (var i = 0; i < tds.length; i++) {\r\n\
     tds[i].addEventListener(\"click\", tdClickListener);\r\n\
 }\r\n\
 function tdClickListener() {\r\n\
-    xhrSend(\"testshot:comparedistance=\" + this.id + \";\");\r\n\
+    var req = \"settarget=\" + this.id + \";\";\r\n\
+    var xhr = new XMLHttpRequest();\r\n\
+    xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+    xhr.send(req);\r\n\
+            ", request.out);
+            if (strstr(idAttacker, "lrw") || strstr(idAttacker, "inf")) {
+                FCGX_PutS("\
+    xhrSend(\"testshot:comparedistance;\");\r\n\
+                ", request.out);
+            }
+            else if (strstr(idAttacker, "blu")) {
+                FCGX_PutS("\
+    xhrSend(\"testshot:checkkill=1000;\");\r\n\
+                ", request.out);
+            }
+            FCGX_PutS("\
 }\r\n\
 </script>\r\n\
 </body>\r\n\
 </html>\r\n\
             ", request.out);
         }
-        else if (strstr(buf, "testshot:comparedistance")) {
+        else if (strstr(buf, "settarget")) {
             strncpy(idTarget, strchr(buf, '=') + 1, strchr(buf, ';') - strchr(buf, '=') - 1);
             idTarget[strchr(buf, ';') - strchr(buf, '=') - 1] = '\0';
+            printf("idTarget:%s", idTarget);
+        }
+        else if (strstr(buf, "testshot:comparedistance")) {
             //printf("idTarget: %s; idAttacker: %s", idTarget, idAttacker);
             char * query = malloc(300);
             char * dice;
@@ -475,12 +664,18 @@ Content-type: text/html\r\n\
             }
             FCGX_PutS("\
 </p>\r\n\
+            ", request.out);
+            if (strstr(idAttacker, "lrw") && strstr(idTarget, "obj")) {
+                FCGX_PutS("\
 <br>\r\n\
 <div style=\"text-align: center;\">\r\n\
 <label><input type=\"radio\">Близко</label>\r\n\
 <label><input type=\"radio\">Средне</label>\r\n\
 <label><input type=\"radio\">Далеко</label>\r\n\
 </div>\r\n\
+                ", request.out);
+            }
+            FCGX_PutS("\
 <br>\r\n\
 <div style=\"text-align: center;\">\r\n\
 <button id=\"yes\" style=\"text-align: center;\">Да</button>\r\n\
@@ -502,6 +697,9 @@ Content-type: text/html\r\n\
     document.getElementById(\'yes\').addEventListener(\"click\", yesButtonListener);\r\n\
     document.getElementById(\'no\').addEventListener(\"click\", noButtonListener);\r\n\
     document.getElementsByTagName(\'body\')[0].addEventListener(\"keypress\", yesnoKeyListener);\r\n\
+            ", request.out);
+            if (strstr(idAttacker, "lrw") && strstr(idTarget, "obj")) {
+                FCGX_PutS("\
     var radio = document.getElementsByTagName(\'input\');\r\n\
     for (var i = 0; i < 3; i++) {\r\n\
         radio[i].checked = false;\r\n\
@@ -527,24 +725,7 @@ Content-type: text/html\r\n\
     }\r\n\
     function yesButtonListener() {\r\n\
         var radio = document.getElementsByTagName(\'input\');\r\n\
-        var s;\r\n\
-        if (radio[0].checked) {\r\n\
-            s = 0;\r\n\
-        }\r\n\
-        else if (radio[1].checked) {\r\n\
-            s = 1;\r\n\
-        }\r\n\
-        else if (radio[2].checked) {\r\n\
-            s = 2;\r\n\
-        }\r\n\
-        xhrSend(\"testshot:checkkill=\" + s + \";\");\r\n\
-    }\r\n\
-    function noButtonListener() {\r\n\
-        xhrSend(\"menu\");\r\n\
-    }\r\n\
-    function yesnoKeyListener(e) {\r\n\
-        if (e.keyCode == 13) {\r\n\
-            var radio = document.getElementsByTagName(\'input\');\r\n\
+        if (radio[0].checked || radio[1].checked || radio[2].checked) {\r\n\
             var s;\r\n\
             if (radio[0].checked) {\r\n\
                 s = 0;\r\n\
@@ -557,10 +738,55 @@ Content-type: text/html\r\n\
             }\r\n\
             xhrSend(\"testshot:checkkill=\" + s + \";\");\r\n\
         }\r\n\
+        else {\r\n\
+            alert(\"Выберите дальность!\");\r\n\
+        }\r\n\
+    }\r\n\
+    function noButtonListener() {\r\n\
+        xhrSend(\"menu\");\r\n\
+    }\r\n\
+    function yesnoKeyListener(e) {\r\n\
+        if (e.keyCode == 13) {\r\n\
+            var radio = document.getElementsByTagName(\'input\');\r\n\
+            if (radio[0].checked || radio[1].checked || radio[2].checked) {\r\n\
+                var s;\r\n\
+                if (radio[0].checked) {\r\n\
+                    s = 0;\r\n\
+                }\r\n\
+                else if (radio[1].checked) {\r\n\
+                    s = 1;\r\n\
+                }\r\n\
+                else if (radio[2].checked) {\r\n\
+                    s = 2;\r\n\
+                }\r\n\
+                xhrSend(\"testshot:checkkill=\" + s + \";\");\r\n\
+            }\r\n\
+            else {\r\n\
+                alert(\"Выберите дальность!\");\r\n\
+            }\r\n\
+        }\r\n\
         //if (e.keyCode == 27) {\r\n\
         //    xhrSend(\"menu\");\r\n\
         //}\r\n\
     }\r\n\
+                ", request.out);
+            }
+            else {
+                FCGX_PutS("\
+    function yesButtonListener() {\r\n\
+        xhrSend(\"testshot:checkkill=1000;\");\r\n\
+    }\r\n\
+    function noButtonListener() {\r\n\
+        xhrSend(\"menu\");\r\n\
+    }\r\n\
+    function yesnoKeyListener(e) {\r\n\
+        if (e.keyCode == 13) {\r\n\
+            xhrSend(\"testshot:checkkill=1000;\");\r\n\
+        }\r\n\
+    }\r\n\
+                ", request.out);
+            }
+            FCGX_PutS("\
 </script>\r\n\
 </body>\r\n\
 </html>\r\n\
@@ -578,6 +804,11 @@ Content-type: text/html\r\n\
                 strcat(query, idAttacker + 3);
                 strcat(query, ";");
             }
+            else if (strstr(idAttacker, "blu")) {
+                strcpy(query, "select*from blowup where id=");
+                strcat(query, idAttacker + 3);
+                strcat(query, ";");
+            }
             //printf("%s", query);
             PGresult *res = PQexec(conn, query);
             char * power = malloc(10);
@@ -586,6 +817,9 @@ Content-type: text/html\r\n\
             }
             else if (strstr(idAttacker, "lrw")) {
                 strcpy(power, PQgetvalue(res, 0, 2));
+            }
+            else if (strstr(idAttacker, "blu")) {
+                strcpy(power, PQgetvalue(res, 0, 1));
             }
             //printf("%s", power);
             PQclear(res);
@@ -634,6 +868,18 @@ Content-type: text/html\r\n\
                 char dist[3][5];
                 readStrengthDamageSpeed(distance, dist);
                 damage = atoi(dist[iindexDistance]);
+                PQclear(res3);
+                free(query3);
+            }
+            else if (strstr(idAttacker, "blu")) {
+                char * query3 = malloc(300);
+                strcpy(query3, "select*from blowup where id=");
+                strcat(query3, idAttacker + 3);
+                strcat(query3, ";");
+                PGresult *res3 = PQexec(conn, query3);
+                char * sdamage = malloc(5);
+                strcpy(sdamage, PQgetvalue(res3, 0, 2));
+                damage = atoi(sdamage);
                 PQclear(res3);
                 free(query3);
             }
@@ -767,25 +1013,27 @@ Content-type: text/html\r\n\
                         levelBefore = 3;
                     }
                     int numOfDice = levelAfter - levelBefore;
-                    FCGX_PutS("\
+                    if (numOfDice > 0) {
+                        FCGX_PutS("\
 <p style=\"text-align: center;\">Значения бросков теста на смерть пилота: \r\n\
-                    ", request.out);
-                    int isPilotKilled = 0;
-                    for (int i = 0; i < numOfDice; i++) {
-                        char* str = malloc(5);
-                        int val = 1 + rand()%6;
-                        if (val > 4) {
-                            isPilotKilled = 1;
+                        ", request.out);
+                        int isPilotKilled = 0;
+                        for (int i = 0; i < numOfDice; i++) {
+                            char* str = malloc(5);
+                            int val = 1 + rand()%6;
+                            if (val > 4) {
+                                isPilotKilled = 1;
+                            }
+                            sprintf(str, "%d", val);
+                            FCGX_PutS(str, request.out);
+                            FCGX_PutS(" ", request.out);
                         }
-                        sprintf(str, "%d", val);
-                        FCGX_PutS(str, request.out);
-                        FCGX_PutS(" ", request.out);
-                    }
-                    FCGX_PutS("\
+                        FCGX_PutS("\
 </p>\r\n\
-                    ", request.out);
-                    if (isPilotKilled) {
-                        FCGX_PutS("<p style=\"text-align: center;\">Пилот убит</p>", request.out);
+                        ", request.out);
+                        if (isPilotKilled) {
+                            FCGX_PutS("<p style=\"text-align: center;\">Пилот убит</p>", request.out);
+                        }
                     }
                     if (machines[atoi(idTarget + 3)].strength <= 0) {
                         machines[atoi(idTarget + 3)].id = 0;
@@ -818,71 +1066,20 @@ Content-type: text/html\r\n\
     document.getElementById(\'ok\').addEventListener(\"click\", okButtonListener);\r\n\
     document.getElementsByTagName(\'body\')[0].addEventListener(\"keypress\", menuKeyListener);\r\n\
     function okButtonListener() {\r\n\
-        xhrSend(\"testshot:ammunition;\");\r\n\
+        xhrSend(\"menu\");\r\n\
     }\r\n\
     function menuKeyListener(e) {\r\n\
         if (e.keyCode == 13) {\r\n\
-            xhrSend(\"testshot:ammunition;\");\r\n\
+            xhrSend(\"menu\");\r\n\
         }\r\n\
     }\r\n\
 </script>\r\n\
 </body>\r\n\
 </html>\r\n\
             ", request.out);
-        }
-        else if (strstr(buf, "testshot:ammunition")) {
-            FCGX_PutS("\
-Content-type: text/html\r\n\
-\r\n\
-<html>\r\n\
-<head>\r\n\
-<meta charset=\"utf-8\">\r\n\
-<title>Бронепехота</title>\r\n\
-</head>\r\n\
-<body>\r\n\
-<p style=\"text-align: center;\">Выберите стреляющую машину</p>\r\n\
-            ", request.out);
-            printObjectsMachines(conn, request, machines, 0);
-            FCGX_PutS("\
-<script>\r\n\
-function xhrSend (s) {\r\n\
-    var xhr = new XMLHttpRequest();\r\n\
-    xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
-    xhr.send(s);\r\n\
-    xhr.onreadystatechange = function() {\r\n\
-        if (xhr.readyState == XMLHttpRequest.DONE) {\r\n\
-            document.open();\r\n\
-            document.write(xhr.responseText);\r\n\
-            document.close();\r\n\
-        }\r\n\
-    }\r\n\
-}\r\n\
-var tds = document.getElementsByTagName(\'td\');\r\n\
-for (var i = 0; i < tds.length; i++) {\r\n\
-    tds[i].addEventListener(\"click\", tdListener);\r\n\
-}\r\n\
-function tdListener() {\r\n\
-    var req = \"machinesammunition=\" + this.id + \";\";\r\n\
-    var xhr = new XMLHttpRequest();\r\n\
-    xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
-    xhr.send(req);\r\n\
-    xhrSend(\"menu\");\r\n\
-}\r\n\
-</script>\r\n\
-</body>\r\n\
-</html>\r\n\
-            ", request.out);
-        }
-        else if (strstr(buf, "machinesammunition")) {
-            char * num = malloc(5);
-            strncpy(num, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
-            num[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
-            machines[atoi(num)].ammunition -= 1;
-            for (int i = 0; i < 20; i++) {
-                printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
-            }
         }
         else if (strstr(buf, "setmachines")) {
+            firstTime = 0;
             FCGX_PutS("\
 Content-type: text/html\r\n\
 \r\n\
@@ -991,6 +1188,9 @@ function clickButton() {\r\n\
                     index++;
                 }
                 buf1 = point + 1;
+            }
+            if (machines[0].id > 0) {
+                isEmptyMachines = 0;
             }
             for (int i = 0; i < 20; i++) {
                 printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
@@ -1273,8 +1473,14 @@ Content-type: text/html\r\n\
 <body>\r\n\
 <div style=\"text-align: center;\"><button id=\"testshot\">Тест на выстрел</button></div>\r\n\
 <br>\r\n\
+            ", request.out);
+            if (firstTime) {
+                FCGX_PutS("\
 <div style=\"text-align: center;\"><button id=\"setmachines\">Создать технику</button></div>\r\n\
 <br>\r\n\
+                ", request.out);
+            }
+            FCGX_PutS("\
 <div style=\"text-align: center;\"><button id=\"editvalues\">Отредактировать боезапас или прочность</button></div>\r\n\
 <script>\r\n\
     function xhrSend (s) {\r\n\
@@ -1290,14 +1496,26 @@ Content-type: text/html\r\n\
         }\r\n\
     }\r\n\
     document.getElementById(\'testshot\').addEventListener(\"click\", testshotButtonListener);\r\n\
+            ", request.out);
+            if (firstTime) {
+                FCGX_PutS("\
     document.getElementById(\'setmachines\').addEventListener(\"click\", setmachinesButtonListener);\r\n\
+                ", request.out);
+            }
+            FCGX_PutS("\
     document.getElementById(\'editvalues\').addEventListener(\"click\", editvaluesButtonListener);\r\n\
     function testshotButtonListener() {\r\n\
         xhrSend(\"testshot:chooseattacker;\");\r\n\
     }\r\n\
+            ", request.out);
+            if (firstTime) {
+                FCGX_PutS("\
     function setmachinesButtonListener() {\r\n\
         xhrSend(\"setmachines;\");\r\n\
     }\r\n\
+                ", request.out);
+            }
+            FCGX_PutS("\
     function editvaluesButtonListener() {\r\n\
         xhrSend(\"editvalues;\");\r\n\
     }\r\n\
