@@ -9,8 +9,8 @@
 
 #define SOCKET_PATH "127.0.0.1:9000"
 #define LIMIT "1000"
-#define SIZEROW 6
-#define SIZEROWLRW 3
+#define SIZEROW 4
+#define SIZEROWLRW 8
 #define SIZEROWMACHINE 6
 
 //хранит дескриптор открытого сокета 
@@ -49,9 +49,16 @@ void do_exit(PGconn *conn) {
     exit(1);
 }
 
-void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset) {
+void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset, int side) {
     char * query = malloc(300);
-    strcpy(query, "select*from infantry offset ");
+    strcpy(query, "select*from infantry where Сторона=\'");
+    if (side) {
+        strcat(query, "Торговый Протекторат");
+    }
+    else {
+        strcat(query, "Империя Полярис");
+    }
+    strcat(query, "\' order by Название offset ");
     strcat(query, offset);
     strcat(query, " limit ");
     strcat(query, LIMIT);
@@ -63,6 +70,11 @@ void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset) {
         do_exit(conn);
     }
     int nrows = PQntuples(res);
+    /*char * temp = malloc(5);
+    sprintf(temp, "%d", nrows);
+    strcat(temp, "\0");
+    printf("%s", temp);
+    free(temp);*/
     FCGX_PutS("<table border=\"0\" style=\"margin: auto;\">", request.out);
     int t = nrows%SIZEROW;
     int p;
@@ -74,13 +86,19 @@ void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset) {
     else {
         p = 0;
     }
+    int commonCounter = 0;
+    int oldCommonCounter6;
+    int oldCommonCounter3;
     for (int j = 0; j < nrows/SIZEROW + p; j++) {
         FCGX_PutS("<tr>", request.out);
         if (j == nrows/SIZEROW + p - 1 && t != 0) k = t;
         else k = SIZEROW;
         int oldcounter = counter;
-        for (; counter < oldcounter + k; counter++) {
-            FCGX_PutS("<td id=\"inf", request.out);
+        for (; counter < oldcounter + 6 * k;) {
+            if (counter >= nrows) {
+                break;
+            }
+            FCGX_PutS("<td class=\"unit\" id=\"inf", request.out);
             FCGX_PutS(PQgetvalue(res, counter, 12), request.out);
             FCGX_PutS("\">", request.out);
             //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
@@ -96,10 +114,58 @@ void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset) {
             FCGX_PutS(PQgetvalue(res, counter, 11), request.out);
             FCGX_PutS("\" width=\"133\" height=\"143\" alt=\"error\">", request.out);
             FCGX_PutS("</td>", request.out);
+            counter += 6;
         }
         FCGX_PutS("</tr>", request.out);
     }
     FCGX_PutS("</table>\r\n", request.out);
+
+    for (; commonCounter < nrows; commonCounter++) {
+        if (commonCounter % 6 == 0) {
+            oldCommonCounter6 = commonCounter;
+            FCGX_PutS("<div style=\"display: none;\" class=\"spoiler\" id=\"spoiler", request.out);
+            FCGX_PutS(PQgetvalue(res, commonCounter, 12), request.out);
+            FCGX_PutS("\" style=\"display: none;\">", request.out);
+            FCGX_PutS("<table>", request.out);
+        }
+        if (commonCounter % 3 == 0) {\
+            oldCommonCounter3 = commonCounter;
+            FCGX_PutS("<tr>", request.out);
+        }
+        FCGX_PutS("<td class=\"units\" id=\"infs", request.out);
+        FCGX_PutS(PQgetvalue(res, commonCounter, 12), request.out);
+        FCGX_PutS("\">", request.out);
+        //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
+        //FCGX_PutS(PQgetvalue(res, i, 11), request.out);
+        //FCGX_PutS("\" width=\"100\" height=\"100\" alt=\"error\">", request.out);
+        FCGX_PutS("<img title=\"Дальн=", request.out);
+        FCGX_PutS(PQgetvalue(res, commonCounter, 5), request.out);
+        FCGX_PutS(" Мощн=", request.out);
+        FCGX_PutS(PQgetvalue(res, commonCounter, 6), request.out);
+        FCGX_PutS(" Бр=", request.out);
+        FCGX_PutS(PQgetvalue(res, commonCounter, 9), request.out);
+        FCGX_PutS("\" src=\"http://localhost/", request.out);
+        FCGX_PutS(PQgetvalue(res, commonCounter, 11), request.out);
+        FCGX_PutS("\" width=\"133\" height=\"143\" alt=\"error\">", request.out);
+        FCGX_PutS("</td>", request.out);
+        if (commonCounter - oldCommonCounter3 == 2 || commonCounter == nrows - 1) {
+            FCGX_PutS("</tr>", request.out);
+        }
+        if (commonCounter - oldCommonCounter6 == 5 || commonCounter == nrows - 1) {
+            char * temp = malloc(5);
+            sprintf(temp, "%d", commonCounter);
+            strcat(temp, "-cc\n\0");
+            printf("%s", temp);
+            free(temp);
+            char * temp2 = malloc(5);
+            sprintf(temp2, "%d", oldCommonCounter6);
+            strcat(temp2, "-occ\n\0");
+            printf("%s", temp2);
+            free(temp2);
+            FCGX_PutS("</table>", request.out);
+            FCGX_PutS("</div>", request.out);
+        }
+    }
     PQclear(res);
 }
 
@@ -351,7 +417,6 @@ int main(void)
         return 1; 
     } 
     printf("Request is inited\n"); 
-
     PGconn *conn = PQconnectdb("user=postgres password=postgres dbname=robogear");
     if (PQstatus(conn) == CONNECTION_BAD) {
     
@@ -417,10 +482,16 @@ Content-type: text/html\r\n\
 <meta charset=\"utf-8\">\r\n\
 <title>Бронепехота</title>\r\n\
 </head>\r\n\
-<body>\r\n\
-<p style=\"text-align: center;\">Выберите атакующего</p>\r\n\
+<body style=\"background: url(background.jpg) no-repeat; background-size: 100% 100vh; background-attachment: fixed;\">\r\n\
+<p style=\"text-align: center; color: white; font-size: 20;\">Выберите атакующего</p>\r\n\
             ", request.out);
-            printAllInfantry(conn, request, "0");
+            FCGX_PutS("<table style=\"margin: auto; border-spacing: 100px 0px;\">\r\n", request.out);
+            FCGX_PutS("<tr>\r\n", request.out);
+            FCGX_PutS("<td id=\"polaris\">\r\n", request.out);
+            printAllInfantry(conn, request, "0", 0);
+            FCGX_PutS("</td><td id=\"protectorat\">\r\n", request.out);
+            printAllInfantry(conn, request, "0", 1);
+            FCGX_PutS("</td></tr></table>\r\n", request.out);
             if (!isEmptyMachines) {
                 FCGX_PutS("<hr align=\"center\" width=\"400\" size=\"5\" color=\"Black\" />\r\n", request.out);
                 printAllLongRangeWeapons(conn, request, "0");
@@ -428,6 +499,7 @@ Content-type: text/html\r\n\
             FCGX_PutS("<hr align=\"center\" width=\"400\" size=\"5\" color=\"Black\" />\r\n", request.out);
             printAllBlowUps(conn, request, "0");
             FCGX_PutS("\
+<div style=\"text-align: center; padding-top: 35px;\"><button>Отправить</button></div>\r\n\
 <script>\r\n\
 function xhrSend (s) {\r\n\
     var xhr = new XMLHttpRequest();\r\n\
@@ -441,19 +513,59 @@ function xhrSend (s) {\r\n\
         }\r\n\
     }\r\n\
 }\r\n\
-var tds = document.getElementsByTagName(\'td\');\r\n\
+var tds = document.getElementsByClassName(\'unit\');\r\n\
 for (var i = 0; i < tds.length; i++) {\r\n\
     tds[i].addEventListener(\"click\", tdClickListener);\r\n\
 }\r\n\
+document.getElementsByTagName(\'button\')[0].addEventListener(\"click\", buttonClickListener);\r\n\
+var req;\r\n\
+var id;\r\n\
 function tdClickListener() {\r\n\
-    var req = \"setttacker=\" + this.id + \";\";\r\n\
+    if (this.id.includes(\"inf\")) {\r\n\
+        var side = this.parentNode.parentNode.parentNode;\r\n\
+        var sideTrs = side.children[0].children;\r\n\
+        for (var j = 0; j < sideTrs.length; j++) {\r\n\
+            var sideTds = sideTrs[j].children;\r\n\
+            for (var i = 0; i < sideTds.length; i++) {\r\n\
+                sideTds[i].style = \"\";\r\n\
+            }\r\n\
+        }\r\n\
+        var allspoilers = document.getElementsByClassName(\"spoiler\");\r\n\
+        for (var i = 0; i < allspoilers.length; i++) {\r\n\
+            allspoilers[i].style = \"display: none;\";\r\n\
+        }\r\n\
+        var spoiler = document.getElementById(\"spoiler\" + this.id.slice(3));\r\n\
+        spoiler.style = \"display: block; position: absolute; left: \" + this.getBoundingClientRect().left + \"; top: \" + this.getBoundingClientRect().top + \"; z-index:999; background-color: white; border-radius: 5px;\";\r\n\
+        var infsRows = spoiler.children[0].children[0].children;\r\n\
+        for (var i = 0; i < infsRows.length; i++) {\r\n\
+            var infs = infsRows[i].children;\r\n\
+            for (var j = 0; j < infs.length; j++) {\r\n\
+                infs[j].addEventListener(\"click\", function(ev) {\r\n\
+                    req = \"setttacker=inf\" + this.id.slice(4) + \";\";\r\n\
+                    id = this.id;\r\n\
+                    var sp = this.parentNode.parentNode.parentNode.parentNode;\r\n\
+                    sp.style = \"display: none;\";\r\n\
+                    var rootInf = document.getElementById(\"inf\" + sp.id.slice(7));\r\n\
+                    var infs2 = this.cloneNode(true);\r\n\
+                    infs2.id = \"inf\" + sp.id.slice(7);\r\n\
+                    infs2.class = \"unit\";\r\n\
+                    rootInf.parentNode.replaceChild(infs2, rootInf);\r\n\
+                    infs2.style = \"border: 3px solid orange; border-radius: 5px;\";\r\n\
+                    infs2.addEventListener(\"click\", tdClickListener);\r\n\
+                });\r\n\
+            }\r\n\
+        }\r\n\
+    }\r\n\
+    \
+}\r\n\
+function buttonClickListener() {\r\n\
     var xhr = new XMLHttpRequest();\r\n\
     xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
     xhr.send(req);\r\n\
-    if (this.id.includes(\"lrw\")) {\r\n\
+    if (id.includes(\"lrw\")) {\r\n\
         xhrSend(\"testshot:ammunition;\");\r\n\
     }\r\n\
-    else if (this.id.includes(\"inf\") || this.id.includes(\"blu\")) {\r\n\
+    else if (id.includes(\"inf\") || id.includes(\"blu\")) {\r\n\
         xhrSend(\"testshot:choosetarget;\");\r\n\
     }\r\n\
 }\r\n\
@@ -476,8 +588,8 @@ Content-type: text/html\r\n\
 <meta charset=\"utf-8\">\r\n\
 <title>Бронепехота</title>\r\n\
 </head>\r\n\
-<body>\r\n\
-<p style=\"text-align: center;\">Выберите стреляющую машину</p>\r\n\
+<body style=\"background: url(background.jpg) no-repeat; background-size: 100% 100vh; background-attachment: fixed;\">\r\n\
+<p style=\"text-align: center; color: white; font-size: 20;\">Выберите стреляющую машину</p>\r\n\
             ", request.out);
             printObjectsMachines(conn, request, machines, 0);
             FCGX_PutS("\
@@ -551,10 +663,10 @@ Content-type: text/html\r\n\
 <meta charset=\"utf-8\">\r\n\
 <title>Бронепехота</title>\r\n\
 </head>\r\n\
-<body>\r\n\
-<p style=\"text-align: center;\">Выберите цель</p>\r\n\
+<body style=\"background: url(background.jpg) no-repeat; background-size: 100% 100vh; background-attachment: fixed;\">\r\n\
+<p style=\"text-align: center; color: white; font-size: 20;\">Выберите цель</p>\r\n\
             ", request.out);
-            printAllInfantry(conn, request, "0");
+            printAllInfantry(conn, request, "0", 0);
             FCGX_PutS("<hr align=\"center\" width=\"400\" size=\"5\" color=\"Black\" />\r\n", request.out);
             printObjectsMachines(conn, request, machines, 0);
             FCGX_PutS("\
@@ -653,8 +765,8 @@ Content-type: text/html\r\n\
 <meta charset=\"utf-8\">\r\n\
 <title>Бронепехота</title>\r\n\
 </head>\r\n\
-<body>\r\n\
-<p style=\"text-align: center;\">Пройден ли тест на дальность? Значения: \r\n\
+<body style=\"background: url(background.jpg) no-repeat; background-size: 100% 100vh; background-attachment: fixed;\">\r\n\
+<p style=\"text-align: center; color: white; font-size: 20;\">Пройден ли тест на дальность? Значения: \r\n\
             ", request.out);
             for (int i = 0; i < inum; i++) {
                 char* str = malloc(5);
@@ -669,9 +781,9 @@ Content-type: text/html\r\n\
                 FCGX_PutS("\
 <br>\r\n\
 <div style=\"text-align: center;\">\r\n\
-<label><input type=\"radio\">Близко</label>\r\n\
-<label><input type=\"radio\">Средне</label>\r\n\
-<label><input type=\"radio\">Далеко</label>\r\n\
+<label style=\"color: white; font-size: 16;\"><input type=\"radio\">Близко</label>\r\n\
+<label style=\"color: white; font-size: 16;\"><input type=\"radio\">Средне</label>\r\n\
+<label style=\"color: white; font-size: 16;\"><input type=\"radio\">Далеко</label>\r\n\
 </div>\r\n\
                 ", request.out);
             }
@@ -908,8 +1020,8 @@ Content-type: text/html\r\n\
 <meta charset=\"utf-8\">\r\n\
 <title>Бронепехота</title>\r\n\
 </head>\r\n\
-<body>\r\n\
-<p style=\"text-align: center;\">Значения бросков мощности: \r\n\
+<body style=\"background: url(background.jpg) no-repeat; background-size: 100% 100vh; background-attachment: fixed;\">\r\n\
+<p style=\"text-align: center; color: white; font-size: 20;\">Значения бросков мощности: \r\n\
             ", request.out);
             if (strstr(idTarget, "inf")) {
                 int isKilled = 0;
@@ -927,10 +1039,10 @@ Content-type: text/html\r\n\
 </p>\r\n\
                 ", request.out);
                 if (isKilled) {
-                    FCGX_PutS("<p style=\"text-align: center;\">Боец убит</p>", request.out);
+                    FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Боец убит</p>", request.out);
                 }
                 else {
-                    FCGX_PutS("<p style=\"text-align: center;\">Боец остался жив</p>", request.out);
+                    FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Боец остался жив</p>", request.out);
                 }
             }
             else if (strstr(idTarget, "obj")) {
@@ -961,7 +1073,7 @@ Content-type: text/html\r\n\
                     free(query);
                     int temp = machines[atoi(idTarget + 3)].strength;
                     machines[atoi(idTarget + 3)].strength -= damage;
-                    FCGX_PutS("<p style=\"text-align: center;\">Броня пробита</p>", request.out);
+                    FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Броня пробита</p>", request.out);
                     char dist[3][5];
                     int strength[3];
                     readStrengthDamageSpeed(distance, dist);
@@ -1015,7 +1127,7 @@ Content-type: text/html\r\n\
                     int numOfDice = levelAfter - levelBefore;
                     if (numOfDice > 0) {
                         FCGX_PutS("\
-<p style=\"text-align: center;\">Значения бросков теста на смерть пилота: \r\n\
+<p style=\"text-align: center; color: white; font-size: 20;\">Значения бросков теста на смерть пилота: \r\n\
                         ", request.out);
                         int isPilotKilled = 0;
                         for (int i = 0; i < numOfDice; i++) {
@@ -1032,16 +1144,16 @@ Content-type: text/html\r\n\
 </p>\r\n\
                         ", request.out);
                         if (isPilotKilled) {
-                            FCGX_PutS("<p style=\"text-align: center;\">Пилот убит</p>", request.out);
+                            FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Пилот убит</p>", request.out);
                         }
                     }
                     if (machines[atoi(idTarget + 3)].strength <= 0) {
                         machines[atoi(idTarget + 3)].id = 0;
-                        FCGX_PutS("<p style=\"text-align: center;\">Машина уничтожена</p>", request.out);
+                        FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Машина уничтожена</p>", request.out);
                     }
                 }
                 else {
-                    FCGX_PutS("<p style=\"text-align: center;\">Броня не пробита</p>", request.out);
+                    FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Броня не пробита</p>", request.out);
                 }
                 for (int i = 0; i < 20; i++) {
                     printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
@@ -1088,8 +1200,8 @@ Content-type: text/html\r\n\
 <meta charset=\"utf-8\">\r\n\
 <title>Бронепехота</title>\r\n\
 </head>\r\n\
-<body>\r\n\
-<p style=\"text-align: center;\">Выберите участвующие в сражении машины</p>\r\n\
+<body style=\"background: url(background.jpg) no-repeat; background-size: 100% 100vh; background-attachment: fixed;\">\r\n\
+<p style=\"text-align: center; color: white; font-size: 20;\">Выберите участвующие в сражении машины</p>\r\n\
             ", request.out);
             printAllWarMachines(conn, request, "0");
             FCGX_PutS("\
@@ -1205,7 +1317,7 @@ Content-type: text/html\r\n\
 <meta charset=\"utf-8\">\r\n\
 <title>Бронепехота</title>\r\n\
 </head>\r\n\
-<body>\r\n\
+<body style=\"background: url(background.jpg) no-repeat; background-size: 100% 100vh; background-attachment: fixed;\">\r\n\
             ", request.out);
             printObjectsMachines(conn, request, machines, 1);
             FCGX_PutS("\
@@ -1470,7 +1582,7 @@ Content-type: text/html\r\n\
 <meta charset=\"utf-8\">\r\n\
 <title>Бронепехота</title>\r\n\
 </head>\r\n\
-<body>\r\n\
+<body style=\"background: url(background.jpg) no-repeat; background-size: 100% 100vh; background-attachment: fixed;\">\r\n\
 <div style=\"text-align: center;\"><button id=\"testshot\">Тест на выстрел</button></div>\r\n\
 <br>\r\n\
             ", request.out);
