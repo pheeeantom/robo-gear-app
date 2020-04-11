@@ -132,7 +132,11 @@ void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset, int side
             oldCommonCounter3 = commonCounter;
             FCGX_PutS("<tr>", request.out);
         }
-        FCGX_PutS("<td class=\"units\" id=\"infs", request.out);
+        FCGX_PutS("<td class=\"units", request.out);
+        if ((!strcmp(PQgetvalue(res, commonCounter, 5), "-") && !strcmp(PQgetvalue(res, commonCounter, 5), "-")) || (!strcmp(PQgetvalue(res, commonCounter, 5), "0Д6") && !strcmp(PQgetvalue(res, commonCounter, 5), "0Д6"))) {
+            FCGX_PutS(" melee", request.out);
+        }
+        FCGX_PutS("\" id=\"infs", request.out);
         FCGX_PutS(PQgetvalue(res, commonCounter, 12), request.out);
         FCGX_PutS("\">", request.out);
         //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
@@ -445,7 +449,7 @@ void printAllBlowUps(PGconn *conn, FCGX_Request request, char * offset) {
         for (; counter < oldcounter + k; counter++) {
             FCGX_PutS("<td id=\"blu", request.out);
             FCGX_PutS(PQgetvalue(res, counter, 4), request.out);
-            FCGX_PutS("\">", request.out);
+            FCGX_PutS("\" class=\"blowup\">", request.out);
             //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
             //FCGX_PutS(PQgetvalue(res, i, 11), request.out);
             //FCGX_PutS("\" width=\"100\" height=\"100\" alt=\"error\">", request.out);
@@ -578,6 +582,7 @@ Content-type: text/html\r\n\
             printAllBlowUps(conn, request, "0");
             FCGX_PutS("\
 <div style=\"text-align: center; padding-top: 35px;\" id=\"send\"><button>Отправить</button></div>\r\n\
+<div style=\"text-align: center; padding-top: 35px;\" id=\"menu\"><button>Меню</button></div>\r\n\
 </body>\r\n\
 <script src=\"testshot.js\"></script>\r\n\
 </html>\r\n\
@@ -902,6 +907,7 @@ Content-type: text/plain\r\n\
                 free(query3);
             }
             int damage;
+            char * sdamage = malloc(5);
             if (strstr(idAttacker, "lrw")) {
                 char * query3 = malloc(300);
                 strcpy(query3, "select*from longrangeweapon where id=");
@@ -916,6 +922,7 @@ Content-type: text/plain\r\n\
                 int iindexDistance = atoi(indexDistance);
                 char dist[3][5];
                 readStrengthDamageSpeed(distance, dist);
+                sdamage = dist[iindexDistance];
                 damage = atoi(dist[iindexDistance]);
                 PQclear(res3);
                 free(query3);
@@ -926,7 +933,6 @@ Content-type: text/plain\r\n\
                 strcat(query3, idAttacker + 3);
                 strcat(query3, ";");
                 PGresult *res3 = PQexec(conn, query3);
-                char * sdamage = malloc(5);
                 strcpy(sdamage, PQgetvalue(res3, 0, 2));
                 damage = atoi(sdamage);
                 PQclear(res3);
@@ -1005,6 +1011,9 @@ Content-type: plain/text\r\n\
                     int temp = machines[atoi(idTarget + 3)].strength;
                     machines[atoi(idTarget + 3)].strength -= damage;
                     FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Броня пробита</p>", request.out);
+                    FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Урон - ", request.out);
+                    FCGX_PutS(sdamage, request.out);
+                    FCGX_PutS("</p>", request.out);
                     char dist[3][5];
                     int strength[3];
                     readStrengthDamageSpeed(distance, dist);
