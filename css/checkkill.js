@@ -13,10 +13,10 @@ function xhrSend (s) {
 document.getElementById('ok').addEventListener("click", okButtonListener);
 document.getElementsByTagName('body')[0].addEventListener("keypress", menuKeyListener);
 function okButtonListener() {
-    xhrSend("menu");
+    xhrSend("testshot:chooseattacker");
 }
 function menuKeyListener(e) {
     if (e.keyCode == 13) {
-        xhrSend("menu");
+        xhrSend("testshot:chooseattacker;");
     }
 }

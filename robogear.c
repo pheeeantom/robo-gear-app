@@ -7,6 +7,8 @@
 #include "fcgiapp.h" 
 #include <libpq-fe.h>
 
+#include <json-c/json.h>
+
 #define SOCKET_PATH "127.0.0.1:9000"
 #define LIMIT "1000"
 #define SIZEROW 4
@@ -15,9 +17,10 @@
 
 //хранит дескриптор открытого сокета 
 //ОСВОБОЖДАТЬ ПАМЯТЬ ИЗ-ЗА ЭТОГО МОЖЕТ БЫТЬ ОШИБКА SEGMENTATION FAULT (CORE DUMPED)
+//СЕТ_КУКИС МОЖЕТ НАЛЕЗАТЬ НА КОНТЕНТ ЛЕНГС
 int socketId; 
-char * idAttacker;
-char * idTarget;
+//char * idAttacker;
+//char * idTarget;
 
 typedef struct machine {
     int id;
@@ -26,10 +29,10 @@ typedef struct machine {
     int speed;
 } machine;
 
-machine * machines;
+//machine * machines;
 
-int firstTime = 1;
-int isEmptyMachines = 1;
+//int firstTime = 1;
+//int isEmptyMachines = 1;
 
 void readStrengthDamageSpeed(char * distance, char dist[3][5]) {
     int u = strchr(distance, '-') - distance;
@@ -47,6 +50,122 @@ void readStrengthDamageSpeed(char * distance, char dist[3][5]) {
 void do_exit(PGconn *conn) {
     PQfinish(conn);
     exit(1);
+}
+
+char* getCookie(char* name, FCGX_Request request) {
+    char* cookies = FCGX_GetParam("HTTP_COOKIE", request.envp);
+    char* innerName = malloc(25);
+    strcpy(innerName, name);
+    strcat(innerName, "=");
+    if (cookies) {
+        if (strstr(cookies, name) == cookies) {
+            char* value = malloc(500);//ЕСЛИ БУДУТ ПРОБЛЕМЫ ЕЩЕ ПОВЫСИТЬ
+            if (strstr(cookies, ";")) {
+                strncpy(value, strchr(cookies, '=') + 1, strchr(cookies, ';') - strchr(cookies, '=') - 1);
+                value[strchr(cookies, ';') - strchr(cookies, '=') - 1] = 0;
+                return value;
+            }
+            else {
+                strncpy(value, strchr(cookies, '=') + 1, strchr(cookies, '\0') - strchr(cookies, '=') - 1);
+                value[strchr(cookies, '\0') - strchr(cookies, '=') - 1] = 0;
+                return value;
+            }
+        }
+        else {
+            char* value = malloc(500);//ЕСЛИ ЧТО ПОВЫСИТЬ
+            char* middle = malloc(25);
+            middle[0] = 0;
+            strcat(middle, "; ");
+            strcat(middle, name);
+            if (strstr(cookies, middle)) {
+                if (strstr(strstr(cookies, middle) + strlen(middle), ";")) {
+                    strncpy(value, strstr(cookies, middle) + strlen(middle) + 1, strchr(strstr(cookies, middle) + strlen(middle) + 1, ';') - (strstr(cookies, middle) + strlen(middle) + 1));
+                    value[strchr(strstr(cookies, middle) + strlen(middle) + 1, ';') - (strstr(cookies, middle) + strlen(middle) + 1)] = 0;
+                    return value;
+                }
+                else {
+                    strncpy(value, strstr(cookies, middle) + strlen(middle) + 1, strchr(strstr(cookies, middle) + strlen(middle) + 1, '\0') - (strstr(cookies, middle) + strlen(middle) + 1));
+                    value[strchr(strstr(cookies, middle) + strlen(middle) + 1, '\0') - (strstr(cookies, middle) + strlen(middle) + 1)] = 0;
+                    return value;
+                }
+            }
+            else {
+                return NULL;
+            }
+            free(middle);
+        }
+    }
+    else {
+        return NULL;
+    }
+    free(innerName);
+}
+
+/*void deleteCookieRequest(char* name, FCGX_Request request) {
+    if (getCookie(name, request) != NULL) {
+        char* response = malloc(100);
+        response[0] = 0;
+        strcat(response, "Set-Cookie: ");
+        strcat(response, name);
+        strcat(response, "=");
+    }
+}*/
+
+machine * getMachines(FCGX_Request request) {
+    struct json_object* obj = json_tokener_parse(getCookie("object-machines", request));
+    char* size = getCookie("size-object-machines", request);
+    machine* response = (machine*)malloc(atoi(size) * sizeof(machine));
+    int num = 0;
+    json_object_object_foreach(obj, key, val) {
+        for (int i = 0; i < json_object_array_length(val); i++) {
+            struct json_object* tmp = json_object_array_get_idx(val, i);
+            //printf("key = %s, arr[%d] = %s\n", key, i, json_object_to_json_string(tmp));
+            switch (i) {
+                case 0:
+                    response[num].id = atoi(json_object_to_json_string(tmp));
+                    break;
+                case 1:
+                    response[num].ammunition= atoi(json_object_to_json_string(tmp));
+                    break;
+                case 2:
+                    response[num].strength = atoi(json_object_to_json_string(tmp));
+                    break;
+                case 3:
+                    response[num].speed = atoi(json_object_to_json_string(tmp));
+                    break;
+            }
+        }
+        num++;
+    }
+    /*for (int i = 0; i < atoi(size); i++) {
+        printf("obj:%d;id:%d;ammunition:%d;strength:%d;speed:%d\n", i, response[i].id, response[i].ammunition, response[i].strength, response[i].speed);
+    }*/
+    return response;
+}
+
+char* createJsonMachines(machine* machines, FCGX_Request request) {
+    struct json_object *obj, *array;
+    obj = json_object_new_object();
+    for (int i = 0; i < atoi(getCookie("size-object-machines", request)); i++) {
+        if (machines[i].id != 0) {
+            array = json_object_new_array();
+            json_object_array_add(array, json_object_new_int(machines[i].id));
+            json_object_array_add(array, json_object_new_int(machines[i].ammunition));
+            json_object_array_add(array, json_object_new_int(machines[i].strength));
+            json_object_array_add(array, json_object_new_int(machines[i].speed));
+            char* result = malloc(10);
+            result[0] = 0;
+            strcat(result, "obj");
+            char* temp = malloc(5);
+            sprintf(temp, "%d", i);
+            strcat(result, temp);
+            result[strlen(result) + strlen(temp)] = 0;
+            json_object_object_add(obj, result, array);
+        }
+    }
+    char* response = malloc(500);//увеличить если что
+    strcpy(response, json_object_to_json_string(obj));
+    return response;
 }
 
 void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset, int side) {
@@ -69,6 +188,7 @@ void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset, int side
         PQclear(res);
         do_exit(conn);
     }
+    free(query);
     int nrows = PQntuples(res);
     /*char * temp = malloc(5);
     sprintf(temp, "%d", nrows);
@@ -186,7 +306,7 @@ void printLongRangeWeapons(PGconn *conn, FCGX_Request request, char* offset, mac
         PQclear(res);
         do_exit(conn);
     }
-    printf("test3\n");
+    //printf("test3\n");
     //printf("%s", PQgetvalue(res, 0, 0));
     char * query = malloc(300);
     strcpy(query, "select*from longrangeweapon where Название in (");
@@ -202,6 +322,7 @@ void printLongRangeWeapons(PGconn *conn, FCGX_Request request, char* offset, mac
         PQclear(res);
         do_exit(conn);
     }
+    free(query);
     int nrows = PQntuples(res);
     /*FCGX_PutS("<table border=\"0\" style=\"margin: auto;\">", request.out);
     int t = nrows%SIZEROWLRW;
@@ -275,6 +396,7 @@ void printAllWarMachines(PGconn *conn, FCGX_Request request, char* offset) {
         PQclear(res);
         do_exit(conn);
     }
+    free(query);
     int nrows = PQntuples(res);
     FCGX_PutS("<table border=\"0\" style=\"margin: auto;\">", request.out);
     int t = nrows%SIZEROWMACHINE;
@@ -313,20 +435,21 @@ void printAllWarMachines(PGconn *conn, FCGX_Request request, char* offset) {
 }
 
 void printObjectsMachines(PGconn *conn, FCGX_Request request, machine * machines, int hasPlusMinus, int side) {
-    int nrows = 0;
+    /*int nrows = 0;
     for (int i = 0; i < 20; i++) {
         if (machines[i].id != 0) {
             nrows++;
         }
-    }
+    }*/
+    int nrows = atoi(getCookie("size-object-machines", request));
     if (nrows != 0) {
         int row = 0;
         FCGX_PutS("<table border=\"0\" style=\"margin: auto;\">", request.out);
         FCGX_PutS("<tr>", request.out);
-        for (int i = 0; i < 20; i++) {
-            if (machines[i].id == 0) {
+        for (int i = 0; i < nrows; i++) {
+            /*if (machines[i].id == 0) {
                 continue;
-            }
+            }*/
             row++;
             if (row != 1 && row%SIZEROWMACHINE == 1) {
                 FCGX_PutS("</tr><tr>", request.out);
@@ -394,21 +517,21 @@ void printObjectsMachines(PGconn *conn, FCGX_Request request, machine * machines
     }
 
     if (!hasPlusMinus) {
-        int * temp = (int*)malloc(20*sizeof(int));
-        for (int i = 0; i < 20; i++) {
+        int * temp = (int*)malloc(nrows*sizeof(int));
+        for (int i = 0; i < nrows; i++) {
             temp[i] = machines[i].id;
         }
-        for (int i = 0; i < 20; i++) {
-            for (int j = 0; j < 20; j++) {
+        for (int i = 0; i < nrows; i++) {
+            for (int j = 0; j < nrows; j++) {
                 if (temp[i] == temp[j] && i != j) {
                     temp[j] = 0;
                 }
             }
         }
-        printf("test1\n");
-        for (int i = 0; i < 20; i++) {
+        //printf("test1\n");
+        for (int i = 0; i < nrows; i++) {
             if (temp[i] != 0) {
-                printf("test2\n");
+                //printf("test2\n");
                 printLongRangeWeapons(conn, request, "0", machines[i]);
             }
         }
@@ -500,12 +623,12 @@ int main(void)
         do_exit(conn);
     }
 
-    idAttacker = malloc(10);
-    idTarget = malloc(10);
-    machines = malloc(20 * sizeof(machine));
-    for (int i = 0; i < 20; i++) {
+    //idAttacker = malloc(10);
+    //idTarget = malloc(10);
+    //machines = malloc(20 * sizeof(machine));
+    /*for (int i = 0; i < 20; i++) {
         machines[i].id = 0;
-    }
+    }*/
  
     for(;;) 
     {  
@@ -549,6 +672,42 @@ Content-type: image/jpeg\r\n\
             buf[(int)(ach - buf + 1)] = '\0';
         }
         if (strstr(buf, "testshot:chooseattacker")) {
+            /*printf("%s\n", FCGX_GetParam("HTTP_COOKIE", request.envp));
+            printf("%s\n", getCookie(FCGX_GetParam("HTTP_COOKIE", request.envp), "abcd"));
+            printf("%s\n", getCookie(FCGX_GetParam("HTTP_COOKIE", request.envp), "abc"));
+            printf("%s\n", getCookie(FCGX_GetParam("HTTP_COOKIE", request.envp), "bcddse"));
+            printf("%s\n", getCookie(FCGX_GetParam("HTTP_COOKIE", request.envp), "bcde"));*/
+
+
+
+
+
+            /*struct json_object *obj, *array;
+            obj = json_object_new_object();
+            array = json_object_new_array();
+            json_object_array_add(array, json_object_new_int(1));
+            json_object_array_add(array, json_object_new_int(2));
+            json_object_array_add(array, json_object_new_int(3));
+            json_object_array_add(array, json_object_new_int(4));
+            json_object_object_add(obj, "obj0", array);
+            array = json_object_new_array();
+            json_object_array_add(array, json_object_new_int(10));
+            json_object_array_add(array, json_object_new_int(20));
+            json_object_array_add(array, json_object_new_int(30));
+            json_object_array_add(array, json_object_new_int(40));
+            json_object_object_add(obj, "obj1", array);
+            //printf("%s\n", json_object_to_json_string(obj));
+            json_object_object_foreach(obj, key, val) {
+                for (i = 0; i < json_object_array_length(val); i++) {
+                    struct json_object* tmp = json_object_array_get_idx(val, i);
+                    printf("key = %s, arr[%d] = %s\n", key, i, json_object_to_json_string(tmp));
+                }
+            }*/
+
+
+
+
+
             FCGX_PutS("\
 Content-type: text/html\r\n\
 \r\n\
@@ -558,7 +717,7 @@ Content-type: text/html\r\n\
 <title>Бронепехота</title>\r\n\
 </head>\r\n\
 <body style=\"background: url(background.jpg) no-repeat; background-size: 100% 100vh; background-attachment: fixed;\">\r\n\
-<div style=\"text-align: center; position: relative; bottom: 20px;\"><span style=\"color: white; font-size: 20;\">Нажмите чтобы поменять атакующую сторону</span><img id=\"icon\" style=\"position: relative; top: 20px;  left: 20px;\" src=\"http://localhost/polaris1.jpg\" width=\"60\"></div>\r\n\
+<div style=\"text-align: center; position: relative; bottom: 20px;\"><span style=\"color: white; font-size: 20;\">Нажмите чтобы поменять атакующую сторону</span><img id=\"icon\" style=\"position: relative; top: 20px;  left: 20px;\" src=\"\" width=\"60\"></div>\r\n\
             ", request.out);
             FCGX_PutS("<table style=\"margin: auto; border-spacing: 100px 0px;\">\r\n", request.out);
             FCGX_PutS("<tr>\r\n", request.out);
@@ -567,7 +726,17 @@ Content-type: text/html\r\n\
             FCGX_PutS("</td><td id=\"protectorat\">\r\n", request.out);
             printAllInfantry(conn, request, "0", 1);
             FCGX_PutS("</td></tr></table>\r\n", request.out);
-            if (!isEmptyMachines) {
+            /*char* sflag = getCookie("isEmptyMachines", request);
+            int flag;
+            if (sflag == NULL) {
+                flag = 0;
+            }
+            else {
+                flag = atoi(sflag);
+            }*/
+            int flag = atoi(getCookie("isEmptyMachines", request));
+            if (!flag) {
+                machine* machines = getMachines(request);
                 FCGX_PutS("<hr align=\"center\" width=\"400\" size=\"5\" color=\"Black\" />\r\n", request.out);
                 FCGX_PutS("<table style=\"margin: auto; border-spacing: 100px 0px;\">\r\n", request.out);
                 FCGX_PutS("<tr>\r\n", request.out);
@@ -577,6 +746,7 @@ Content-type: text/html\r\n\
                 printObjectsMachines(conn, request, machines, 0, 1);
                 FCGX_PutS("</td></tr></table>\r\n", request.out);
                 //printAllLongRangeWeapons(conn, request, "0");
+                free(machines);
             }
             FCGX_PutS("<hr align=\"center\" width=\"400\" size=\"5\" color=\"Black\" />\r\n", request.out);
             printAllBlowUps(conn, request, "0");
@@ -589,9 +759,17 @@ Content-type: text/html\r\n\
             ", request.out);
         }
         else if (strstr(buf, "setttacker")) {
+            char* idAttacker = malloc(10);
             strncpy(idAttacker, strchr(buf, '=') + 1, strchr(buf, ';') - strchr(buf, '=') - 1);
             idAttacker[strchr(buf, ';') - strchr(buf, '=') - 1] = '\0';
-            printf("idAttacker:%s", idAttacker);
+            FCGX_PutS("\
+Content-type: text/html\r\n\
+Set-Cookie: idAttacker=\
+            ", request.out);
+            FCGX_PutS(idAttacker, request.out);
+            FCGX_PutS("\r\n", request.out);
+            FCGX_PutS("\r\n", request.out);
+            //printf("idAttacker:%s", idAttacker);
         }
         /*else if (strstr(buf, "testshot:ammunition")) {
             FCGX_PutS("\
@@ -650,10 +828,17 @@ function tdListener() {\r\n\
             char * num = malloc(5);
             strncpy(num, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
             num[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
+            machine* machines = getMachines(request);
             if (machines[atoi(num)].ammunition > 0) {
                 machines[atoi(num)].ammunition -= 1;
                 FCGX_PutS("\
 Content-type: text/html\r\n\
+Set-Cookie: object-machines=\
+                ", request.out);
+                //printf("%s", createJsonMachines(machines, request));
+                FCGX_PutS(createJsonMachines(machines, request), request.out);
+                FCGX_PutS("\r\n", request.out);
+                FCGX_PutS("\
 \r\n\
 ok", request.out);
             }
@@ -663,9 +848,10 @@ Content-type: text/html\r\n\
 \r\n\
 error", request.out);
             }
-            for (int i = 0; i < 20; i++) {
+            free(machines);
+            /*for (int i = 0; i < 20; i++) {
                 printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
-            }
+            }*/
         }
         /*else if (strstr(buf, "testshot:choosetarget")) {
             //printf("%s", idAttacker);
@@ -725,9 +911,17 @@ function tdClickListener() {\r\n\
             ", request.out);
         }*/
         else if (strstr(buf, "settarget")) {
+            char* idTarget = malloc(10);
             strncpy(idTarget, strchr(buf, '=') + 1, strchr(buf, ';') - strchr(buf, '=') - 1);
             idTarget[strchr(buf, ';') - strchr(buf, '=') - 1] = '\0';
-            printf("idTarget:%s", idTarget);
+            FCGX_PutS("\
+Content-type: text/html\r\n\
+Set-Cookie: idTarget=\
+            ", request.out);
+            FCGX_PutS(idTarget, request.out);
+            FCGX_PutS("\r\n", request.out);
+            FCGX_PutS("\r\n", request.out);
+            //printf("idTarget:%s", idTarget);
         }
 
 
@@ -753,6 +947,8 @@ function tdClickListener() {\r\n\
             //printf("idTarget: %s; idAttacker: %s", idTarget, idAttacker);
             char * query = malloc(300);
             char * dice;
+            char* idTarget = getCookie("idTarget", request);
+            char* idAttacker = getCookie("idAttacker", request);
             if (strstr(idAttacker, "inf")) {
                 strcpy(query, "select*from infantry where id=");
                 strcat(query, idAttacker + 3);
@@ -847,7 +1043,10 @@ Content-type: text/plain\r\n\
 
 
         else if (strstr(buf, "testshot:checkkill")) {
+            machine* machines = getMachines(request);
             char * query = malloc(300);
+            char* idAttacker = getCookie("idAttacker", request);
+            char* idTarget = getCookie("idTarget", request);
             if (strstr(idAttacker, "inf")) {
                 strcpy(query, "select*from infantry where id=");
                 strcat(query, idAttacker + 3);
@@ -955,12 +1154,17 @@ Content-type: text/plain\r\n\
             int iarmor = atoi(armor);
             //printf("power: %s; idAttacker: %s; idTarget: %s; num: %s; side: %s; armor: %s\n", power, idAttacker, idTarget, num, side, armor);
             srand(time(NULL));
-            FCGX_PutS("\
-Content-type: plain/text\r\n\
-\r\n\
-<p style=\"text-align: center; color: white; font-size: 20;\">Значения бросков мощности: \r\n\
-            ", request.out);
+            char* response = malloc(1000);//ЕСЛИ ЧТО ПОВЫСИТЬ
+            response[0] = 0;
+            strcat(response, "\
+Content-type: plain/text\r\n");
+            char* tempHTML = malloc(1000);
+            tempHTML[0] = 0;
             if (strstr(idTarget, "inf")) {
+                FCGX_PutS(response, request.out);
+                FCGX_PutS("\r\n\
+<p style=\"text-align: center; color: white; font-size: 20;\">Значения бросков мощности: \r\n\
+                ", request.out);
                 int isKilled = 0;
                 for (int i = 0; i < inum; i++) {
                     char* str = malloc(5);
@@ -983,6 +1187,7 @@ Content-type: plain/text\r\n\
                 }
             }
             else if (strstr(idTarget, "obj")) {
+                strcat(tempHTML, "<p style=\"text-align: center; color: white; font-size: 20;\">Значения бросков мощности: \r\n");
                 int isKilled = 0;
                 for (int i = 0; i < inum; i++) {
                     char* str = malloc(5);
@@ -991,12 +1196,15 @@ Content-type: plain/text\r\n\
                         isKilled = 1;
                     }
                     sprintf(str, "%d", val);
-                    FCGX_PutS(str, request.out);
-                    FCGX_PutS(" ", request.out);
+                    //FCGX_PutS(str, request.out);
+                    //FCGX_PutS(" ", request.out);
+                    strcat(tempHTML, str);
+                    strcat(tempHTML, " ");
                 }
-                FCGX_PutS("\
+                /*FCGX_PutS("\
 </p>\r\n\
-                ", request.out);
+                ", request.out);*/
+                strcat(tempHTML, "</p>\r\n");
                 if (isKilled) {
                     char * query = malloc(300);
                     strcpy(query, "select*from warmachine where id=");
@@ -1010,10 +1218,10 @@ Content-type: plain/text\r\n\
                     free(query);
                     int temp = machines[atoi(idTarget + 3)].strength;
                     machines[atoi(idTarget + 3)].strength -= damage;
-                    FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Броня пробита</p>", request.out);
-                    FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Урон - ", request.out);
-                    FCGX_PutS(sdamage, request.out);
-                    FCGX_PutS("</p>", request.out);
+                    strcat(tempHTML, "<p style=\"text-align: center; color: white; font-size: 20;\">Броня пробита</p>");
+                    strcat(tempHTML, "<p style=\"text-align: center; color: white; font-size: 20;\">Урон - ");
+                    strcat(tempHTML, sdamage);
+                    strcat(tempHTML, "</p>");
                     char dist[3][5];
                     int strength[3];
                     readStrengthDamageSpeed(distance, dist);
@@ -1066,9 +1274,8 @@ Content-type: plain/text\r\n\
                     }
                     int numOfDice = levelAfter - levelBefore;
                     if (numOfDice > 0) {
-                        FCGX_PutS("\
-<p style=\"text-align: center; color: white; font-size: 20;\">Значения бросков теста на смерть пилота: \r\n\
-                        ", request.out);
+                        strcat(tempHTML, "\
+<p style=\"text-align: center; color: white; font-size: 20;\">Значения бросков теста на смерть пилота: \r\n");
                         int isPilotKilled = 0;
                         for (int i = 0; i < numOfDice; i++) {
                             char* str = malloc(5);
@@ -1077,37 +1284,68 @@ Content-type: plain/text\r\n\
                                 isPilotKilled = 1;
                             }
                             sprintf(str, "%d", val);
-                            FCGX_PutS(str, request.out);
-                            FCGX_PutS(" ", request.out);
+                            strcat(tempHTML, str);
+                            strcat(tempHTML, " ");
                         }
                         FCGX_PutS("\
 </p>\r\n\
                         ", request.out);
                         if (isPilotKilled) {
-                            FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Пилот убит</p>", request.out);
+                            strcat(tempHTML, "<p style=\"text-align: center; color: white; font-size: 20;\">Пилот убит</p>");
                         }
                     }
                     if (machines[atoi(idTarget + 3)].strength <= 0) {
                         machines[atoi(idTarget + 3)].id = 0;
-                        FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Машина уничтожена</p>", request.out);
+                        strcat(tempHTML, "<p style=\"text-align: center; color: white; font-size: 20;\">Машина уничтожена</p>");
+                        strcat(response, "Set-Cookie: size-object-machines=");
+                        int size = atoi(getCookie("size-object-machines", request));
+                        size--;
+                        if (size < 0) {
+                            size = 0;
+                        }
+                        if (size == 0) {
+                            strcat(tempHTML, "Set-Cookie: isEmptyMachines=1\r\n");
+                        }
+                        char * ssize = malloc(5);
+                        sprintf(ssize, "%d", size);
+                        strcat(response, ssize);
+                        strcat(response, "\r\n");
                     }
+                    strcat(response, "\
+Set-Cookie: object-machines=\
+                    ");
+                    strcat(response, createJsonMachines(machines, request));
+                    strcat(response, "\r\n");
+                    strcat(response, "\r\n");
+                    //printf("%s%s", response, tempHTML);
+                    FCGX_PutS(response, request.out);
+                    FCGX_PutS(tempHTML, request.out);
+                    free(response);
+                    free(tempHTML);
                 }
                 else {
+                    strcat(response, "\r\n");
+                    FCGX_PutS(response, request.out);
+                    FCGX_PutS(tempHTML, request.out);
+                    printf("%s%s", response, tempHTML);
+                    free(response);
+                    free(tempHTML);
                     FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Броня не пробита</p>", request.out);
                 }
-                for (int i = 0; i < 20; i++) {
+                /*for (int i = 0; i < 20; i++) {
                     printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
-                }
+                }*/
             }
             FCGX_PutS("\
 <br>\r\n\
 <div style=\"text-align: center;\"><button id=\"ok\" style=\"text-align: center;\">Ok</button></div>\r\n\
             ", request.out);
+            free(machines);
         }
         else if (strstr(buf, "setmachines")) {
-            firstTime = 0;
             FCGX_PutS("\
 Content-type: text/html\r\n\
+Set-Cookie: firstTime=0\r\n\
 \r\n\
 <html>\r\n\
 <head>\r\n\
@@ -1168,6 +1406,9 @@ function clickButton() {\r\n\
                 }
             }
             int index = 0;
+            struct json_object *obj, *array;
+            obj = json_object_new_object();
+            char* size = malloc(5);
             for (int i = 0; i < counter; i++) {
                 char * equalence = strchr(buf1, '=');
                 char * id = malloc(5);
@@ -1188,7 +1429,38 @@ function clickButton() {\r\n\
                 int inum = atoi(num);
                 int bindex = index;
                 for (int i = bindex; i < bindex + inum; i++) {
-                    machines[i].id = iid;
+                    array = json_object_new_array();
+                    json_object_array_add(array, json_object_new_int(iid));
+                    char * query = malloc(100);
+                    strcpy(query, "select * from warmachine where id=");
+                    strcat(query, id);
+                    strcat(query, ";");
+                    PGresult *res = PQexec(conn, query);
+                    char * ammunition = PQgetvalue(res, 0, 6);
+                    int iammunition = atoi(ammunition);
+                    json_object_array_add(array, json_object_new_int(iammunition));
+                    char * strength = PQgetvalue(res, 0, 7);
+                    char * tstrength = malloc(5);
+                    strncpy(tstrength, strength, strchr(strength, '-') - strength);
+                    tstrength[strchr(strength, '-') - strength] = '\0';
+                    int istrength = atoi(tstrength);
+                    json_object_array_add(array, json_object_new_int(istrength));
+                    char * speed = PQgetvalue(res, 0, 8);
+                    char * tspeed = malloc(5);
+                    strncpy(tspeed, speed, strchr(speed, '-') - speed);
+                    tspeed[strchr(speed, '-') - speed] = '\0';
+                    int ispeed = atoi(tspeed);
+                    json_object_array_add(array, json_object_new_int(ispeed));
+                    char* key = malloc(5);
+                    key[0] = 0;
+                    strcat(key, "obj");
+                    sprintf(size, "%d", i);
+                    strcat(key, size);
+                    key[strlen(key) + strlen(size)] = 0;
+                    json_object_object_add(obj, key, array);
+                    PQclear(res);
+                    free(query);
+                    /*machines[i].id = iid;
                     char * query = malloc(100);
                     strcpy(query, "select * from warmachine where id=");
                     strcat(query, id);
@@ -1210,19 +1482,40 @@ function clickButton() {\r\n\
                     int ispeed = atoi(tspeed);
                     machines[i].speed = ispeed;
                     PQclear(res);
-                    free(query);
+                    free(query);*/
                     index++;
                 }
                 buf1 = point + 1;
             }
-            if (machines[0].id > 0) {
+            /*if (machines[0].id > 0) {
                 isEmptyMachines = 0;
-            }
-            for (int i = 0; i < 20; i++) {
+            }*/
+            /*for (int i = 0; i < 20; i++) {
                 printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
+            }*/
+            FCGX_PutS("\
+Content-type: text/html\r\n\
+Set-Cookie: object-machines=\
+", request.out);
+            FCGX_PutS(json_object_to_json_string(obj), request.out);
+            FCGX_PutS("\r\n",request.out);
+            if (strcmp(json_object_to_json_string(obj), "{ }")) {
+                FCGX_PutS("Set-Cookie: isEmptyMachines=0\r\n", request.out);
+                FCGX_PutS("Set-Cookie: size-object-machines=", request.out);
+                int temp = atoi(size);
+                temp++;
+                sprintf(size, "%d", temp);
+                FCGX_PutS(size, request.out);
             }
+            //printf("%s", json_object_to_json_string(obj));
+            FCGX_PutS("\r\n",request.out);
+            FCGX_PutS("\r\n",request.out);
         }
         else if (strstr(buf, "editvalues")) {
+            machine* machines = getMachines(request);
+            /*for (int i = 0; i < atoi(getCookie("size-object-machines", request)); i++) {
+                printf("obj:%d;id:%d;ammunition:%d;strength:%d;speed:%d\n", i, machines[i].id, machines[i].ammunition, machines[i].strength, machines[i].speed);
+            }*/
             FCGX_PutS("\
 Content-type: text/html\r\n\
 \r\n\
@@ -1236,81 +1529,14 @@ Content-type: text/html\r\n\
             printObjectsMachines(conn, request, machines, 1, 0);
             FCGX_PutS("\
 <div style=\"text-align: center;\"><button id=\"menu\">Ок</button></div>\r\n\
-<script>\r\n\
-    function xhrSend (s) {\r\n\
-        var xhr = new XMLHttpRequest();\r\n\
-        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
-        xhr.send(s);\r\n\
-        xhr.onreadystatechange = function() {\r\n\
-            if (xhr.readyState == XMLHttpRequest.DONE) {\r\n\
-                document.open();\r\n\
-                document.write(xhr.responseText);\r\n\
-                document.close();\r\n\
-            }\r\n\
-        }\r\n\
-    }\r\n\
-    document.getElementById(\'menu\').addEventListener(\"click\", backToMenu);\r\n\
-    var strength = document.getElementsByClassName(\'strength\');\r\n\
-    for (var i = 0; i < strength.length; i++) {\r\n\
-        strength[i].children[0].addEventListener(\"click\", plusStrength);\r\n\
-    }\r\n\
-    for (var i = 0; i < strength.length; i++) {\r\n\
-        strength[i].children[1].addEventListener(\"click\", minusStrength);\r\n\
-    }\r\n\
-    var ammunition = document.getElementsByClassName(\'ammunition\');\r\n\
-    for (var i = 0; i < ammunition.length; i++) {\r\n\
-        ammunition[i].children[0].addEventListener(\"click\", plusAmmunition);\r\n\
-    }\r\n\
-    for (var i = 0; i < ammunition.length; i++) {\r\n\
-        ammunition[i].children[1].addEventListener(\"click\", minusAmmunition);\r\n\
-    }\r\n\
-    function plusStrength() {\r\n\
-        var xhr = new XMLHttpRequest();\r\n\
-        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
-        xhr.send(\"plusstrength=\" + this.parentNode.parentNode.id + \";\");\r\n\
-        xhrSend(\"editvalues;\");\r\n\
-    }\r\n\
-    function minusStrength() {\r\n\
-        var xhr = new XMLHttpRequest();\r\n\
-        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
-        xhr.send(\"minusstrength=\" + this.parentNode.parentNode.id + \";\");\r\n\
-        xhrSend(\"editvalues;\");\r\n\
-    }\r\n\
-    function plusAmmunition() {\r\n\
-        var xhr = new XMLHttpRequest();\r\n\
-        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
-        xhr.send(\"plusammunition=\" + this.parentNode.parentNode.id + \";\");\r\n\
-        xhrSend(\"editvalues;\");\r\n\
-    }\r\n\
-    function minusAmmunition() {\r\n\
-        var xhr = new XMLHttpRequest();\r\n\
-        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
-        xhr.send(\"minusammunition=\" + this.parentNode.parentNode.id + \";\");\r\n\
-        xhrSend(\"editvalues;\");\r\n\
-    }\r\n\
-    function backToMenu() {\r\n\
-        xhrSend(\"menu\");\r\n\
-        //var strength = document.getElementsByClassName(\'strength\');\r\n\
-        //var ammunition = document.getElementsByClassName(\'ammunition\');\r\n\
-        //var req = \"updatevalues:\";\r\n\
-        //for (var i = 0; i < inputs.length; i++) {\r\n\
-        //    if (i != inputs.length - 1) {\r\n\
-        //        req += inputs[i].parentNode.id + \"=\" + inputs[i].value + \",\";\r\n\
-        //    }\r\n\
-        //    else {\r\n\
-        //        req += inputs[i].parentNode.id + \"=\" + inputs[i].value + \";\";\r\n\
-        //    }\r\n\
-        //}\r\n\
-        //var xhr = new XMLHttpRequest();\r\n\
-        //xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
-        //xhr.send(req);\r\n\
-    }\r\n\
-</script>\r\n\
+<script src=\"http://localhost/editvalues.js\"></script>\r\n\
 </body>\r\n\
 </html>\r\n\
             ", request.out);
+            free(machines);
         }
         else if (strstr(buf, "plusstrength")) {
+            machine* machines = getMachines(request);
             char * i = malloc(5);
             strncpy(i, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
             i[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
@@ -1372,16 +1598,25 @@ Content-type: text/html\r\n\
             if (levelAfter < 3 && levelAfter >= 0) {
                 machines[atoi(i)].speed = speed[levelAfter];
             }
+            FCGX_PutS("\
+Content-type: text/html\r\n\
+Set-Cookie: object-machines=\
+            ", request.out);
+            //printf("%s", createJsonMachines(machines, request));
+            FCGX_PutS(createJsonMachines(machines, request), request.out);
+            FCGX_PutS("\r\n", request.out);
+            FCGX_PutS("\r\n", request.out);
+            free(machines);
 
 
 
 
-
-            for (int i = 0; i < 20; i++) {
+            /*for (int i = 0; i < 20; i++) {
                 printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
-            }
+            }*/
         }
         else if (strstr(buf, "minusstrength")) {
+            machine* machines = getMachines(request);
             char * i = malloc(5);
             strncpy(i, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
             i[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
@@ -1425,6 +1660,23 @@ Content-type: text/html\r\n\
             }
             if (levelAfter == 3) {
                 machines[atoi(i)].id = 0;
+                FCGX_PutS("\
+Content-type: text/html\r\n\
+Set-Cookie: size-object-machines=\
+                    ", request.out);
+                char* ssize = getCookie("size-object-machines", request);
+                int size = atoi(ssize) - 1;
+                if (size < 0) {
+                    size = 0;
+                }
+                sprintf(ssize, "%d", size);
+                FCGX_PutS(ssize, request.out);
+                FCGX_PutS("\r\n", request.out);
+                if (size == 0) {
+                    FCGX_PutS("\
+Set-Cookie: isEmptyMachines=1\r\n\
+                    ", request.out);
+                }
             }
             query = malloc(300);
             strcpy(query, "select*from warmachine where id=");
@@ -1444,15 +1696,32 @@ Content-type: text/html\r\n\
             if (levelAfter != 3) {
                 machines[atoi(i)].speed = speed[levelAfter];
             }
-
-
-
-
-            for (int i = 0; i < 20; i++) {
-                printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
+            //printf("%d", machines[atoi(i)].strength);
+            if (levelAfter != 3) {
+                FCGX_PutS("\
+Content-type: text/html\r\n\
+Set-Cookie: object-machines=\
+            ", request.out);
             }
+            else {
+                FCGX_PutS("\
+Set-Cookie: object-machines=\
+            ", request.out);
+            }
+            //printf("%s", createJsonMachines(machines, request));
+            FCGX_PutS(createJsonMachines(machines, request), request.out);
+            FCGX_PutS("\r\n", request.out);
+            FCGX_PutS("\r\n", request.out);
+            free(machines);
+
+
+
+            /*for (int i = 0; i < 20; i++) {
+                printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
+            }*/
         }
         else if (strstr(buf, "plusammunition")) {
+            machine* machines = getMachines(request);
             char * i = malloc(5);
             strncpy(i, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
             i[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
@@ -1471,11 +1740,21 @@ Content-type: text/html\r\n\
             }
             PQclear(res);
             free(query);
-            for (int i = 0; i < 20; i++) {
+            FCGX_PutS("\
+Content-type: text/html\r\n\
+Set-Cookie: object-machines=\
+            ", request.out);
+            //printf("%s", createJsonMachines(machines, request));
+            FCGX_PutS(createJsonMachines(machines, request), request.out);
+            FCGX_PutS("\r\n", request.out);
+            FCGX_PutS("\r\n", request.out);
+            free(machines);
+            /*for (int i = 0; i < 20; i++) {
                 printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
-            }
+            }*/
         }
         else if (strstr(buf, "minusammunition")) {
+            machine* machines = getMachines(request);
             char * i = malloc(5);
             strncpy(i, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
             i[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
@@ -1483,13 +1762,44 @@ Content-type: text/html\r\n\
             if (machines[atoi(i)].ammunition < 0) {
                 machines[atoi(i)].ammunition = 0;
             }
-            for (int i = 0; i < 20; i++) {
+            /*for (int i = 0; i < 20; i++) {
                 printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
-            }
-        }
-        else {
+            }*/
             FCGX_PutS("\
 Content-type: text/html\r\n\
+Set-Cookie: object-machines=\
+            ", request.out);
+            //printf("%s", createJsonMachines(machines, request));
+            FCGX_PutS(createJsonMachines(machines, request), request.out);
+            FCGX_PutS("\r\n", request.out);
+            FCGX_PutS("\r\n", request.out);
+            free(machines);
+        }
+        else if (strstr(buf, "newgame")) {
+            FCGX_PutS("\
+Content-type: text/html\r\n\
+            ", request.out);
+        }
+        else {
+/*Set-Cookie: abc=123;\r\n\
+Set-Cookie: bcde=23456;\r\n\
+Set-Cookie: abcd=0123;\r\n\
+Set-Cookie: bcddse=red;\r\n\
+*/
+            int firstTime;
+            if (getCookie("firstTime", request) == NULL) {
+                firstTime = 1;
+            }
+            else if (!strcmp(getCookie("firstTime", request), "0")) {
+                firstTime = 0;
+            }
+            FCGX_PutS("\
+Content-type: text/html\r\n\
+", request.out);
+            if (firstTime) {
+                FCGX_PutS("Set-Cookie: isEmptyMachines=1\r\n", request.out);
+            }
+            FCGX_PutS("\
 \r\n\
 <html>\r\n\
 <head>\r\n\
@@ -1497,6 +1807,8 @@ Content-type: text/html\r\n\
 <title>Бронепехота</title>\r\n\
 </head>\r\n\
 <body style=\"background: url(background.jpg) no-repeat; background-size: 100% 100vh; background-attachment: fixed;\">\r\n\
+<div style=\"text-align: center;\"><button id=\"newgame\">Новая игра</button></div>\r\n\
+<br>\r\n\
 <div style=\"text-align: center;\"><button id=\"testshot\">Тест на выстрел</button></div>\r\n\
 <br>\r\n\
             ", request.out);
@@ -1521,6 +1833,7 @@ Content-type: text/html\r\n\
             }\r\n\
         }\r\n\
     }\r\n\
+    document.getElementById(\'newgame\').addEventListener(\"click\", newgameButtonListener);\r\n\
     document.getElementById(\'testshot\').addEventListener(\"click\", testshotButtonListener);\r\n\
             ", request.out);
             if (firstTime) {
@@ -1530,6 +1843,18 @@ Content-type: text/html\r\n\
             }
             FCGX_PutS("\
     document.getElementById(\'editvalues\').addEventListener(\"click\", editvaluesButtonListener);\r\n\
+    function newgameButtonListener() {\r\n\
+        var answer = confirm(\"Действительно начать новую игру?\");\r\n\
+        if (answer) {\r\n\
+            document.cookie = \"firstTime = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+            document.cookie = \"idAttacker = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+            document.cookie = \"idTarget = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+            document.cookie = \"isEmptyMachines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+            document.cookie = \"object-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+            document.cookie = \"size-object-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+            window.location.reload(false);\r\n\
+        }\r\n\
+    }\r\n\
     function testshotButtonListener() {\r\n\
         xhrSend(\"testshot:chooseattacker;\");\r\n\
     }\r\n\

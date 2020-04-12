@@ -10,6 +10,11 @@ function xhrSend (s) {
         }
     }
 }
+function getCookie(name) {
+  var value = "; " + document.cookie;
+  var parts = value.split("; " + name + "=");
+  if (parts.length == 2) return parts.pop().split(";").shift();
+}
 var tds = document.getElementsByClassName('unit');
 for (var i = 0; i < tds.length; i++) {
     tds[i].addEventListener("click", tdClickListener);
@@ -30,7 +35,20 @@ var req2 = "";
 var id = "";
 var id2 = "";
 var ammoreq = "";
-var sideIcon = "polaris";
+var sideIcon;
+if (getCookie("side")) {
+    sideIcon = getCookie("side");
+    if (getCookie("side") == "polaris") {
+        document.getElementById("icon").src = "http://localhost/polaris1.jpg";
+    }
+    else {
+        document.getElementById("icon").src = "http://localhost/protectorat1.jpeg";
+    }
+}
+else {
+    sideIcon = "polaris";
+    document.getElementById("icon").src = "http://localhost/polaris1.jpg";
+}
 var attackobj = "";
 var blu = false;
 var spoilerVisible = false;
@@ -251,37 +269,41 @@ function getCompareDistance() {
     var xhr2 = new XMLHttpRequest();
     xhr2.open('POST', 'http://localhost/', true);
     xhr2.send(req2);
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'http://localhost/', true);
-    //xhr.responseType = 'Text';
     xhr.onload = function() {
-        var div = document.createElement("div");
-        div.id = "comparedistance";
-        div.innerHTML = xhr.response;
-        document.body.appendChild(div);
-        document.getElementById("send").removeChild(document.getElementById("send").children[0]);
-        document.getElementById("send").parentNode.removeChild(document.getElementById("send"));
-        document.getElementById("menu").removeChild(document.getElementById("menu").children[0]);
-        document.getElementById("menu").parentNode.removeChild(document.getElementById("menu"));
-        tds = document.getElementsByClassName('unit');
-        for (var i = 0; i < tds.length; i++) {
-            tds[i].removeEventListener("click", tdClickListener);
+        xhr2.onload = function() {
+            var xhr3 = new XMLHttpRequest();
+            xhr3.open('POST', 'http://localhost/', true);
+            //xhr.responseType = 'Text';
+            xhr3.onload = function() {
+                var div = document.createElement("div");
+                div.id = "comparedistance";
+                div.innerHTML = xhr3.response;
+                document.body.appendChild(div);
+                document.getElementById("send").removeChild(document.getElementById("send").children[0]);
+                document.getElementById("send").parentNode.removeChild(document.getElementById("send"));
+                document.getElementById("menu").removeChild(document.getElementById("menu").children[0]);
+                document.getElementById("menu").parentNode.removeChild(document.getElementById("menu"));
+                tds = document.getElementsByClassName('unit');
+                for (var i = 0; i < tds.length; i++) {
+                    tds[i].removeEventListener("click", tdClickListener);
+                }
+                tdsm = document.getElementsByClassName('machine');
+                for (var i = 0; i < tdsm.length; i++) {
+                    tdsm[i].removeEventListener("click", tdClickListener);
+                }
+                tdsb = document.getElementsByClassName('blowup');
+                for (var i = 0; i < tdsb.length; i++) {
+                    tdsb[i].removeEventListener("click", tdClickListener);
+                }
+                document.getElementById("icon").removeEventListener("click", changeSide);
+                var s = document.createElement("script");
+                s.src = "http://localhost/comparedistance.js";
+                document.head.appendChild(s);
+            }
+            xhr3.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr3.send("testshot:comparedistance;");
         }
-        tdsm = document.getElementsByClassName('machine');
-        for (var i = 0; i < tdsm.length; i++) {
-            tdsm[i].removeEventListener("click", tdClickListener);
-        }
-        tdsb = document.getElementsByClassName('blowup');
-        for (var i = 0; i < tdsb.length; i++) {
-            tdsb[i].removeEventListener("click", tdClickListener);
-        }
-        document.getElementById("icon").removeEventListener("click", changeSide);
-        var s = document.createElement("script");
-        s.src = "http://localhost/comparedistance.js";
-        document.head.appendChild(s);
     }
-    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.send("testshot:comparedistance;");
 }
 function getCheckKill() {
     var xhr = new XMLHttpRequest();
@@ -290,36 +312,40 @@ function getCheckKill() {
     var xhr2 = new XMLHttpRequest();
     xhr2.open('POST', 'http://localhost/', true);
     xhr2.send(req2);
-    var xhr = new XMLHttpRequest();
-    xhr.open('POST', 'http://localhost/', true);
-    //xhr.responseType = 'Text';
     xhr.onload = function() {
-        var div = document.createElement("div");
-        div.innerHTML = xhr.response;
-        document.body.appendChild(div);
-        document.getElementById("send").removeChild(document.getElementById("send").children[0]);
-        document.getElementById("send").parentNode.removeChild(document.getElementById("send"));
-        document.getElementById("menu").removeChild(document.getElementById("menu").children[0]);
-        document.getElementById("menu").parentNode.removeChild(document.getElementById("menu"));
-        tds = document.getElementsByClassName('unit');
-        for (var i = 0; i < tds.length; i++) {
-            tds[i].removeEventListener("click", tdClickListener);
+        xhr2.onload = function() {
+            var xhr3 = new XMLHttpRequest();
+            xhr3.open('POST', 'http://localhost/', true);
+            //xhr.responseType = 'Text';
+            xhr3.onload = function() {
+                var div = document.createElement("div");
+                div.innerHTML = xhr3.response;
+                document.body.appendChild(div);
+                document.getElementById("send").removeChild(document.getElementById("send").children[0]);
+                document.getElementById("send").parentNode.removeChild(document.getElementById("send"));
+                document.getElementById("menu").removeChild(document.getElementById("menu").children[0]);
+                document.getElementById("menu").parentNode.removeChild(document.getElementById("menu"));
+                tds = document.getElementsByClassName('unit');
+                for (var i = 0; i < tds.length; i++) {
+                    tds[i].removeEventListener("click", tdClickListener);
+                }
+                tdsm = document.getElementsByClassName('machine');
+                for (var i = 0; i < tdsm.length; i++) {
+                    tdsm[i].removeEventListener("click", tdClickListener);
+                }
+                tdsb = document.getElementsByClassName('blowup');
+                for (var i = 0; i < tdsb.length; i++) {
+                    tdsb[i].removeEventListener("click", tdClickListener);
+                }
+                document.getElementById("icon").removeEventListener("click", changeSide);
+                var s = document.createElement("script");
+                s.src = "http://localhost/checkkill.js";
+                document.head.appendChild(s);
+            }
+            xhr3.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+            xhr3.send("testshot:checkkill;");
         }
-        tdsm = document.getElementsByClassName('machine');
-        for (var i = 0; i < tdsm.length; i++) {
-            tdsm[i].removeEventListener("click", tdClickListener);
-        }
-        tdsb = document.getElementsByClassName('blowup');
-        for (var i = 0; i < tdsb.length; i++) {
-            tdsb[i].removeEventListener("click", tdClickListener);
-        }
-        document.getElementById("icon").removeEventListener("click", changeSide);
-        var s = document.createElement("script");
-        s.src = "http://localhost/checkkill.js";
-        document.head.appendChild(s);
     }
-    xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-    xhr.send("testshot:checkkill;");
 }
 function buttonClickListener() {
     if (req && req2 && !spoilerVisible) {
@@ -352,6 +378,7 @@ function buttonClickListener() {
             //flag = true;
             getCompareDistance();
         }
+        document.cookie = "side = " + sideIcon;
         //hile (flag == null) { sleep(100); }
         //if (flag) {
         //}

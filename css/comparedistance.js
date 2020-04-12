@@ -86,7 +86,7 @@ function yesButtonListener() {
     }
 }
 function noButtonListener() {
-    xhrSend("menu");
+    xhrSend("testshot:chooseattacker;");
 }
 function yesnoKeyListener(e) {
     if (req.includes("lrw") && req2.includes("obj")) {
