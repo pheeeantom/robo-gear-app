@@ -14,9 +14,11 @@ document.getElementById('ok').addEventListener("click", okButtonListener);
 document.getElementsByTagName('body')[0].addEventListener("keypress", menuKeyListener);
 function okButtonListener() {
     xhrSend("testshot:chooseattacker");
+    localStorage.setItem("logs", localStorage.getItem("logs") + "</div>");
 }
 function menuKeyListener(e) {
     if (e.keyCode == 13) {
-        xhrSend("testshot:chooseattacker;");
+        xhrSend("testshot:chooseattacker");
+        localStorage.setItem("logs", localStorage.getItem("logs") + "</div>");
     }
 }

@@ -1041,6 +1041,88 @@ Content-type: text/plain\r\n\
 
 
 
+        else if (strstr(buf, "logs:getattackerdefender")) {
+            machine* machines = getMachines(request);
+            char * query = malloc(300);
+            char* idAttacker = getCookie("idAttacker", request);
+            char* idTarget = getCookie("idTarget", request);
+            if (strstr(idAttacker, "inf")) {
+                strcpy(query, "select Название, Номер from infantry where id=");
+                strcat(query, idAttacker + 3);
+                strcat(query, ";");
+            }
+            else if (strstr(idAttacker, "lrw")) {
+                strcpy(query, "select Название from longrangeweapon where id=");
+                strcat(query, idAttacker + 3);
+                strcat(query, ";");
+            }
+            else if (strstr(idAttacker, "blu")) {
+                strcpy(query, "select Название from blowup where id=");
+                strcat(query, idAttacker + 3);
+                strcat(query, ";");
+            }
+            PGresult *res = PQexec(conn, query);
+            char * response = malloc(250);
+            if (strstr(idAttacker, "inf")) {
+                strcpy(response, "<div class=\"turn\"><p>Атакующий боец из отряда:");
+                strcat(response, PQgetvalue(res, 0, 0));
+                strcat(response, ", под номером:");
+                strcat(response, PQgetvalue(res, 0, 1));
+            }
+            else if (strstr(idAttacker, "lrw")) {
+                strcpy(response, "<div class=\"turn\"><p>Атакующее орудие:");
+                strcat(response, PQgetvalue(res, 0, 0));
+            }
+            else if (strstr(idAttacker, "blu")) {
+                strcpy(response, "<div class=\"turn\"><p>Размер взрыва:");
+                strcat(response, PQgetvalue(res, 0, 0));
+            }
+            //printf("%s", power);
+            PQclear(res);
+            free(query);
+
+            strcat(response, " ");
+            query = malloc(300);
+            if (strstr(idTarget, "inf")) {
+                strcpy(query, "select Название, Номер from infantry where id=");
+                strcat(query, idTarget + 3);
+                strcat(query, ";");
+            }
+            else if (strstr(idTarget, "obj")) {
+                char* idObj = malloc(5);
+                sprintf(idObj, "%d", machines[atoi(idTarget + 3)].id);
+                strcpy(query, "select Название from warmachine where id=");
+                strcat(query, idObj);
+                strcat(query, ";");
+            }
+            res = PQexec(conn, query);
+            if (strstr(idTarget, "inf")) {
+                strcat(response, "Цель боец из отряда:");
+                strcat(response, PQgetvalue(res, 0, 0));
+                strcat(response, ", под номером:");
+                strcat(response, PQgetvalue(res, 0, 1));
+            }
+            else if (strstr(idTarget, "obj")) {
+                strcat(response, "Цель машина:");
+                strcat(response, PQgetvalue(res, 0, 0));
+            }
+            //printf("%s", power);
+            PQclear(res);
+            free(query);
+
+            strcat(response, "</p>");
+
+            FCGX_PutS("\
+Content-type: plain/text\r\n\
+\r\n", request.out);
+            FCGX_PutS(response, request.out);
+            free(response);
+        }
+
+
+
+
+
 
         else if (strstr(buf, "testshot:checkkill")) {
             machine* machines = getMachines(request);
@@ -1140,6 +1222,8 @@ Content-type: text/plain\r\n\
             if (strstr(idAttacker, "inf")) {
                 damage = 1;
             }
+            char* logs = malloc(1000);
+            logs[0] = 0;
             printf("DAMAGE%dDAMAGE", damage);
             char * num = malloc(2);
             char * side = malloc(3);
@@ -1181,9 +1265,11 @@ Content-type: plain/text\r\n");
                 ", request.out);
                 if (isKilled) {
                     FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Боец убит</p>", request.out);
+                    strcat(logs, "<p>Боец убит</p>");
                 }
                 else {
                     FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Боец остался жив</p>", request.out);
+                    strcat(logs, "<p>Боец остался жив</p>");
                 }
             }
             else if (strstr(idTarget, "obj")) {
@@ -1219,9 +1305,13 @@ Content-type: plain/text\r\n");
                     int temp = machines[atoi(idTarget + 3)].strength;
                     machines[atoi(idTarget + 3)].strength -= damage;
                     strcat(tempHTML, "<p style=\"text-align: center; color: white; font-size: 20;\">Броня пробита</p>");
+                    strcat(logs, "<p>Броня пробита</p>");
                     strcat(tempHTML, "<p style=\"text-align: center; color: white; font-size: 20;\">Урон - ");
+                    strcat(logs, "<p>Урон - ");
                     strcat(tempHTML, sdamage);
+                    strcat(logs, sdamage);
                     strcat(tempHTML, "</p>");
+                    strcat(logs, "</p>");
                     char dist[3][5];
                     int strength[3];
                     readStrengthDamageSpeed(distance, dist);
@@ -1292,11 +1382,13 @@ Content-type: plain/text\r\n");
                         ", request.out);
                         if (isPilotKilled) {
                             strcat(tempHTML, "<p style=\"text-align: center; color: white; font-size: 20;\">Пилот убит</p>");
+                            strcat(logs, "<p>Пилот убит</p>");
                         }
                     }
                     if (machines[atoi(idTarget + 3)].strength <= 0) {
                         machines[atoi(idTarget + 3)].id = 0;
                         strcat(tempHTML, "<p style=\"text-align: center; color: white; font-size: 20;\">Машина уничтожена</p>");
+                        strcat(logs, "<p>Машина уничтожена</p>");
                         strcat(response, "Set-Cookie: size-object-machines=");
                         int size = atoi(getCookie("size-object-machines", request));
                         size--;
@@ -1327,10 +1419,11 @@ Set-Cookie: object-machines=\
                     strcat(response, "\r\n");
                     FCGX_PutS(response, request.out);
                     FCGX_PutS(tempHTML, request.out);
-                    printf("%s%s", response, tempHTML);
+                    //printf("%s%s", response, tempHTML);
                     free(response);
                     free(tempHTML);
                     FCGX_PutS("<p style=\"text-align: center; color: white; font-size: 20;\">Броня не пробита</p>", request.out);
+                    strcat(logs, "<p>Броня не пробита</p>");
                 }
                 /*for (int i = 0; i < 20; i++) {
                     printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
@@ -1340,6 +1433,9 @@ Set-Cookie: object-machines=\
 <br>\r\n\
 <div style=\"text-align: center;\"><button id=\"ok\" style=\"text-align: center;\">Ok</button></div>\r\n\
             ", request.out);
+            FCGX_PutS("//logs//", request.out);
+            FCGX_PutS(logs, request.out);
+            free(logs);
             free(machines);
         }
         else if (strstr(buf, "setmachines")) {
@@ -1780,6 +1876,48 @@ Set-Cookie: object-machines=\
 Content-type: text/html\r\n\
             ", request.out);
         }
+        else if (strstr(buf, "showlogs")) {
+            FCGX_PutS("\
+Content-type: text/html\r\n\
+\r\n\
+<html>\r\n\
+<head>\r\n\
+<meta charset=\"utf-8\">\r\n\
+<title>Бронепехота</title>\r\n\
+<link rel=\"stylesheet\" href=\"http://localhost/logs.css\">\r\n\
+</head>\r\n\
+<body style=\"background: url(background.jpg) no-repeat; background-size: 100% 100vh; background-attachment: fixed;\">\r\n\
+<div id=\"logs\">\r\n\
+</div>\r\n\
+<div style=\"text-align: center;\"><button id=\"ok\">Ок</button></div>\r\n\
+<script>\r\n\
+    function xhrSend (s) {\r\n\
+        var xhr = new XMLHttpRequest();\r\n\
+        xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
+        xhr.send(s);\r\n\
+        xhr.onreadystatechange = function() {\r\n\
+            if (xhr.readyState == XMLHttpRequest.DONE) {\r\n\
+                document.open();\r\n\
+                document.write(xhr.responseText);\r\n\
+                document.close();\r\n\
+            }\r\n\
+        }\r\n\
+    }\r\n\
+    if (localStorage.getItem(\"logs\")) {\r\n\
+        document.getElementById(\"logs\").innerHTML = localStorage.getItem(\"logs\");\r\n\
+    }\r\n\
+    else {\r\n\
+        document.getElementById(\"logs\").innerHTML = \"Здесь будет ваша история битвы\";\r\n\
+    }\r\n\
+    document.getElementById(\"ok\").addEventListener(\"click\", okButtonListener);\r\n\
+    function okButtonListener() {\r\n\
+        xhrSend(\"menu\");\r\n\
+    }\r\n\
+</script>\r\n\
+</body>\r\n\
+</html>\r\n\
+", request.out);
+        }
         else {
 /*Set-Cookie: abc=123;\r\n\
 Set-Cookie: bcde=23456;\r\n\
@@ -1820,6 +1958,8 @@ Content-type: text/html\r\n\
             }
             FCGX_PutS("\
 <div style=\"text-align: center;\"><button id=\"editvalues\">Отредактировать боезапас или прочность</button></div>\r\n\
+<br>\r\n\
+<div style=\"text-align: center;\"><button id=\"logs\">История</button></div>\r\n\
 <script>\r\n\
     function xhrSend (s) {\r\n\
         var xhr = new XMLHttpRequest();\r\n\
@@ -1843,6 +1983,7 @@ Content-type: text/html\r\n\
             }
             FCGX_PutS("\
     document.getElementById(\'editvalues\').addEventListener(\"click\", editvaluesButtonListener);\r\n\
+    document.getElementById(\'logs\').addEventListener(\"click\", logsButtonListener);\r\n\
     function newgameButtonListener() {\r\n\
         var answer = confirm(\"Действительно начать новую игру?\");\r\n\
         if (answer) {\r\n\
@@ -1869,6 +2010,9 @@ Content-type: text/html\r\n\
             FCGX_PutS("\
     function editvaluesButtonListener() {\r\n\
         xhrSend(\"editvalues;\");\r\n\
+    }\r\n\
+    function logsButtonListener() {\r\n\
+        xhrSend(\"showlogs;\");\r\n\
     }\r\n\
 </script>\r\n\
 </body>\r\n\

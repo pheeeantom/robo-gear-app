@@ -1,0 +1,10 @@
+#logs {
+	background-color: rgba(255,255,255,.75);
+	border-radius: 15px;
+}
+.turn {
+	padding-bottom: 50px;
+}
+.turn:last-child {
+	padding-bottom: 0;
+}
