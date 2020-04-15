@@ -15,6 +15,7 @@ function getCookie(name) {
   var parts = value.split("; " + name + "=");
   if (parts.length == 2) return parts.pop().split(";").shift();
 }
+var delayedMachine = "";
 var tds = document.getElementsByClassName('unit');
 for (var i = 0; i < tds.length; i++) {
     tds[i].addEventListener("click", tdClickListener);
@@ -347,6 +348,12 @@ function getCheckKill() {
         }
     }
 }
+function createBackupCookies() {
+    if (getCookie("object-machines") && getCookie("size-object-machines")) {
+        document.cookie = "old-object-machines = " + getCookie("object-machines");
+        document.cookie = "old-size-object-machines = " + getCookie("size-object-machines");
+    }
+}
 function buttonClickListener() {
     if (req && req2 && !spoilerVisible) {
         //alert(ammoreq);
@@ -359,23 +366,27 @@ function buttonClickListener() {
             xhr0.send(ammoreq);
             xhr0.onreadystatechange = function() {
                 if (xhr0.readyState == XMLHttpRequest.DONE) {
-                    if (xhr0.responseText == "error") {
+                    if (xhr0.responseText.split("//logs//")[0] == "error") {
                         alert("Не хватает боезапаса!");
                         //flag = false;
                         //xhrSend("menu");
                     }
-                    else if (xhr0.responseText == "ok") {
+                    else if (xhr0.responseText.split("//logs//")[0] == "ok") {
                         //flag = true;
+                        delayedMachine = xhr0.responseText.split("//logs//")[1];
+                        createBackupCookies();
                         getCompareDistance();
                     }
                 }
             }
         }
         else if (req.includes("blu")) {
+            createBackupCookies();
             getCheckKill();
         }
         else {
             //flag = true;
+            createBackupCookies();
             getCompareDistance();
         }
         document.cookie = "side = " + sideIcon;

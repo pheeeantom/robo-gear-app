@@ -112,35 +112,59 @@ char* getCookie(char* name, FCGX_Request request) {
 }*/
 
 machine * getMachines(FCGX_Request request) {
-    struct json_object* obj = json_tokener_parse(getCookie("object-machines", request));
-    char* size = getCookie("size-object-machines", request);
-    machine* response = (machine*)malloc(atoi(size) * sizeof(machine));
-    int num = 0;
-    json_object_object_foreach(obj, key, val) {
-        for (int i = 0; i < json_object_array_length(val); i++) {
-            struct json_object* tmp = json_object_array_get_idx(val, i);
-            //printf("key = %s, arr[%d] = %s\n", key, i, json_object_to_json_string(tmp));
-            switch (i) {
-                case 0:
-                    response[num].id = atoi(json_object_to_json_string(tmp));
-                    break;
-                case 1:
-                    response[num].ammunition= atoi(json_object_to_json_string(tmp));
-                    break;
-                case 2:
-                    response[num].strength = atoi(json_object_to_json_string(tmp));
-                    break;
-                case 3:
-                    response[num].speed = atoi(json_object_to_json_string(tmp));
-                    break;
+    if (getCookie("object-machines", request) && strcmp(getCookie("object-machines", request), "{ }")) {
+        struct json_object* obj = json_tokener_parse(getCookie("object-machines", request));
+        char* size = getCookie("size-object-machines", request);
+        machine* response = (machine*)malloc(atoi(size) * sizeof(machine));
+        int num = 0;
+        json_object_object_foreach(obj, key, val) {
+            for (int i = 0; i < json_object_array_length(val); i++) {
+                struct json_object* tmp = json_object_array_get_idx(val, i);
+                //printf("key = %s, arr[%d] = %s\n", key, i, json_object_to_json_string(tmp));
+                switch (i) {
+                    case 0:
+                        response[num].id = atoi(json_object_to_json_string(tmp));
+                        break;
+                    case 1:
+                        response[num].ammunition= atoi(json_object_to_json_string(tmp));
+                        break;
+                    case 2:
+                        response[num].strength = atoi(json_object_to_json_string(tmp));
+                        break;
+                    case 3:
+                        response[num].speed = atoi(json_object_to_json_string(tmp));
+                        break;
+                }
+            }
+            num++;
+        }
+        /*for (int i = 0; i < atoi(size); i++) {
+            printf("obj:%d;id:%d;ammunition:%d;strength:%d;speed:%d\n", i, response[i].id, response[i].ammunition, response[i].strength, response[i].speed);
+        }*/
+        return response;
+    }
+    else {
+        return NULL;
+    }
+}
+
+char * getInfantry(FCGX_Request request) {
+    if (getCookie("infantry", request)) {
+        char* response = malloc(100);
+        response[0] = 0;
+        struct json_object* obj = json_tokener_parse(getCookie("infantry", request));
+        for (int i = 0; i < json_object_array_length(obj); i++) {
+            struct json_object* tmp = json_object_array_get_idx(obj, i);
+            strcat(response, json_object_to_json_string(tmp));
+            if (i != json_object_array_length(obj) - 1) {
+                strcat(response, ",");
             }
         }
-        num++;
+        return response;
     }
-    /*for (int i = 0; i < atoi(size); i++) {
-        printf("obj:%d;id:%d;ammunition:%d;strength:%d;speed:%d\n", i, response[i].id, response[i].ammunition, response[i].strength, response[i].speed);
-    }*/
-    return response;
+    else {
+        return NULL;
+    }
 }
 
 char* createJsonMachines(machine* machines, FCGX_Request request) {
@@ -168,8 +192,8 @@ char* createJsonMachines(machine* machines, FCGX_Request request) {
     return response;
 }
 
-void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset, int side) {
-    char * query = malloc(300);
+void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset, int side, int set) {
+    char * query = malloc(500);
     strcpy(query, "select*from infantry where Сторона=\'");
     if (side) {
         strcat(query, "Торговый Протекторат");
@@ -177,7 +201,16 @@ void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset, int side
     else {
         strcat(query, "Империя Полярис");
     }
-    strcat(query, "\' order by Название offset ");
+    //printf("%s\n", getInfantry(request));
+    if (!set) {
+        strcat(query, "\' and Название in (select Название from infantry where id in (");
+        strcat(query, getInfantry(request));
+        strcat(query, "))");
+    }
+    else {
+        strcat(query, "\'");
+    }
+    strcat(query, " order by Название offset ");
     strcat(query, offset);
     strcat(query, " limit ");
     strcat(query, LIMIT);
@@ -220,74 +253,98 @@ void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset, int side
             }
             FCGX_PutS("<td class=\"unit\" id=\"inf", request.out);
             FCGX_PutS(PQgetvalue(res, counter, 12), request.out);
+            if (set) {
+                FCGX_PutS("\" data-cost=\"", request.out);
+                FCGX_PutS(PQgetvalue(res, counter, 2), request.out);
+            }
             FCGX_PutS("\">", request.out);
+            /*if (set) {
+                FCGX_PutS("<input class=\"check\" id=\"check", request.out);
+                FCGX_PutS(PQgetvalue(res, counter, 12), request.out);
+                FCGX_PutS("\" type=\"checkbox\" style=\"position: relative; right: 5px;\">", request.out);
+            }*/
             //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
             //FCGX_PutS(PQgetvalue(res, i, 11), request.out);
             //FCGX_PutS("\" width=\"100\" height=\"100\" alt=\"error\">", request.out);
-            FCGX_PutS("<img title=\"Дальн=", request.out);
-            FCGX_PutS(PQgetvalue(res, counter, 5), request.out);
-            FCGX_PutS(" Мощн=", request.out);
-            FCGX_PutS(PQgetvalue(res, counter, 6), request.out);
-            FCGX_PutS(" Бр=", request.out);
-            FCGX_PutS(PQgetvalue(res, counter, 9), request.out);
+            FCGX_PutS("<img title=\"", request.out);
+            if (!set) {
+                FCGX_PutS("Дальн=", request.out);
+                FCGX_PutS(PQgetvalue(res, counter, 5), request.out);
+                FCGX_PutS(" Мощн=", request.out);
+                FCGX_PutS(PQgetvalue(res, counter, 6), request.out);
+                FCGX_PutS(" Бр=", request.out);
+                FCGX_PutS(PQgetvalue(res, counter, 9), request.out);
+            }
+            else {
+                FCGX_PutS("Стоим=", request.out);
+                FCGX_PutS(PQgetvalue(res, counter, 2), request.out);
+            }
             FCGX_PutS("\" src=\"http://localhost/", request.out);
             FCGX_PutS(PQgetvalue(res, counter, 11), request.out);
             FCGX_PutS("\" width=\"133\" height=\"143\" alt=\"error\">", request.out);
+            /*if (set) {
+                FCGX_PutS("<input class=\"input-infantry\">\r\n", request.out);
+            }*/
+            if (set) {
+                FCGX_PutS("<br>", request.out);
+                FCGX_PutS("<div><span class=\"input-infantry\">0</span><button class=\"plus\">+</button><button class=\"minus\">-</button></div>", request.out);
+            }
             FCGX_PutS("</td>", request.out);
             counter += 6;
         }
         FCGX_PutS("</tr>", request.out);
     }
     FCGX_PutS("</table>\r\n", request.out);
-
-    for (; commonCounter < nrows; commonCounter++) {
-        if (commonCounter % 6 == 0) {
-            oldCommonCounter6 = commonCounter;
-            FCGX_PutS("<div style=\"display: none;\" class=\"spoiler\" id=\"spoiler", request.out);
+    if (!set) {
+        for (; commonCounter < nrows; commonCounter++) {
+            if (commonCounter % 6 == 0) {
+                oldCommonCounter6 = commonCounter;
+                FCGX_PutS("<div style=\"display: none;\" class=\"spoiler\" id=\"spoiler", request.out);
+                FCGX_PutS(PQgetvalue(res, commonCounter, 12), request.out);
+                FCGX_PutS("\" style=\"display: none;\">", request.out);
+                FCGX_PutS("<table>", request.out);
+            }
+            if (commonCounter % 3 == 0) {\
+                oldCommonCounter3 = commonCounter;
+                FCGX_PutS("<tr>", request.out);
+            }
+            FCGX_PutS("<td class=\"units", request.out);
+            if ((!strcmp(PQgetvalue(res, commonCounter, 5), "-") && !strcmp(PQgetvalue(res, commonCounter, 5), "-")) || (!strcmp(PQgetvalue(res, commonCounter, 5), "0Д6") && !strcmp(PQgetvalue(res, commonCounter, 5), "0Д6"))) {
+                FCGX_PutS(" melee", request.out);
+            }
+            FCGX_PutS("\" id=\"infs", request.out);
             FCGX_PutS(PQgetvalue(res, commonCounter, 12), request.out);
-            FCGX_PutS("\" style=\"display: none;\">", request.out);
-            FCGX_PutS("<table>", request.out);
-        }
-        if (commonCounter % 3 == 0) {\
-            oldCommonCounter3 = commonCounter;
-            FCGX_PutS("<tr>", request.out);
-        }
-        FCGX_PutS("<td class=\"units", request.out);
-        if ((!strcmp(PQgetvalue(res, commonCounter, 5), "-") && !strcmp(PQgetvalue(res, commonCounter, 5), "-")) || (!strcmp(PQgetvalue(res, commonCounter, 5), "0Д6") && !strcmp(PQgetvalue(res, commonCounter, 5), "0Д6"))) {
-            FCGX_PutS(" melee", request.out);
-        }
-        FCGX_PutS("\" id=\"infs", request.out);
-        FCGX_PutS(PQgetvalue(res, commonCounter, 12), request.out);
-        FCGX_PutS("\">", request.out);
-        //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
-        //FCGX_PutS(PQgetvalue(res, i, 11), request.out);
-        //FCGX_PutS("\" width=\"100\" height=\"100\" alt=\"error\">", request.out);
-        FCGX_PutS("<img title=\"Дальн=", request.out);
-        FCGX_PutS(PQgetvalue(res, commonCounter, 5), request.out);
-        FCGX_PutS(" Мощн=", request.out);
-        FCGX_PutS(PQgetvalue(res, commonCounter, 6), request.out);
-        FCGX_PutS(" Бр=", request.out);
-        FCGX_PutS(PQgetvalue(res, commonCounter, 9), request.out);
-        FCGX_PutS("\" src=\"http://localhost/", request.out);
-        FCGX_PutS(PQgetvalue(res, commonCounter, 11), request.out);
-        FCGX_PutS("\" width=\"133\" height=\"143\" alt=\"error\">", request.out);
-        FCGX_PutS("</td>", request.out);
-        if (commonCounter - oldCommonCounter3 == 2 || commonCounter == nrows - 1) {
-            FCGX_PutS("</tr>", request.out);
-        }
-        if (commonCounter - oldCommonCounter6 == 5 || commonCounter == nrows - 1) {
-            /*char * temp = malloc(5);
-            sprintf(temp, "%d", commonCounter);
-            strcat(temp, "-cc\n\0");
-            printf("%s", temp);
-            free(temp);
-            char * temp2 = malloc(5);
-            sprintf(temp2, "%d", oldCommonCounter6);
-            strcat(temp2, "-occ\n\0");
-            printf("%s", temp2);
-            free(temp2);*/
-            FCGX_PutS("</table>", request.out);
-            FCGX_PutS("</div>", request.out);
+            FCGX_PutS("\">", request.out);
+            //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
+            //FCGX_PutS(PQgetvalue(res, i, 11), request.out);
+            //FCGX_PutS("\" width=\"100\" height=\"100\" alt=\"error\">", request.out);
+            FCGX_PutS("<img title=\"Дальн=", request.out);
+            FCGX_PutS(PQgetvalue(res, commonCounter, 5), request.out);
+            FCGX_PutS(" Мощн=", request.out);
+            FCGX_PutS(PQgetvalue(res, commonCounter, 6), request.out);
+            FCGX_PutS(" Бр=", request.out);
+            FCGX_PutS(PQgetvalue(res, commonCounter, 9), request.out);
+            FCGX_PutS("\" src=\"http://localhost/", request.out);
+            FCGX_PutS(PQgetvalue(res, commonCounter, 11), request.out);
+            FCGX_PutS("\" width=\"133\" height=\"143\" alt=\"error\">", request.out);
+            FCGX_PutS("</td>", request.out);
+            if (commonCounter - oldCommonCounter3 == 2 || commonCounter == nrows - 1) {
+                FCGX_PutS("</tr>", request.out);
+            }
+            if (commonCounter - oldCommonCounter6 == 5 || commonCounter == nrows - 1) {
+                /*char * temp = malloc(5);
+                sprintf(temp, "%d", commonCounter);
+                strcat(temp, "-cc\n\0");
+                printf("%s", temp);
+                free(temp);
+                char * temp2 = malloc(5);
+                sprintf(temp2, "%d", oldCommonCounter6);
+                strcat(temp2, "-occ\n\0");
+                printf("%s", temp2);
+                free(temp2);*/
+                FCGX_PutS("</table>", request.out);
+                FCGX_PutS("</div>", request.out);
+            }
         }
     }
     PQclear(res);
@@ -383,9 +440,16 @@ void printLongRangeWeapons(PGconn *conn, FCGX_Request request, char* offset, mac
     PQclear(res);
 }
 
-void printAllWarMachines(PGconn *conn, FCGX_Request request, char* offset) {
+void printAllWarMachines(PGconn *conn, FCGX_Request request, char* offset, int side) {
     char * query = malloc(300);
-    strcpy(query, "select*from warmachine offset ");
+    strcpy(query, "select*from warmachine where Сторона=\'");
+    if (side) {
+        strcat(query, "Торговый Протекторат");
+    }
+    else {
+        strcat(query, "Империя Полярис");
+    }
+    strcat(query, "\' offset ");
     strcat(query, offset);
     strcat(query, " limit ");
     strcat(query, LIMIT);
@@ -417,15 +481,20 @@ void printAllWarMachines(PGconn *conn, FCGX_Request request, char* offset) {
         for (; counter < oldcounter + k; counter++) {
             FCGX_PutS("<td id=\"", request.out);
             FCGX_PutS(PQgetvalue(res, counter, 10), request.out);
+            FCGX_PutS("\" data-cost=\"", request.out);
+            FCGX_PutS(PQgetvalue(res, counter, 3), request.out);
             FCGX_PutS("\">", request.out);
             //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
             //FCGX_PutS(PQgetvalue(res, i, 11), request.out);
             //FCGX_PutS("\" width=\"100\" height=\"100\" alt=\"error\">", request.out);
             FCGX_PutS("<img src=\"http://localhost/", request.out);
             FCGX_PutS(PQgetvalue(res, counter, 9), request.out);
-            FCGX_PutS("\" width=\"266\" height=\"200\" alt=\"error\">", request.out);
+            FCGX_PutS("\" width=\"266\" height=\"200\" alt=\"error\" title=\"Стоим=", request.out);
+            FCGX_PutS(PQgetvalue(res, counter, 3), request.out);
+            FCGX_PutS("\">", request.out);
             FCGX_PutS("<br>\r\n", request.out);
-            FCGX_PutS("<input>\r\n", request.out);
+            //FCGX_PutS("<input class=\"input\">\r\n", request.out);
+            FCGX_PutS("<div><span class=\"input\">0</span><button class=\"plus\">+</button><button class=\"minus\">-</button></div>", request.out);
             FCGX_PutS("</td>", request.out);
         }
         FCGX_PutS("</tr>", request.out);
@@ -722,9 +791,9 @@ Content-type: text/html\r\n\
             FCGX_PutS("<table style=\"margin: auto; border-spacing: 100px 0px;\">\r\n", request.out);
             FCGX_PutS("<tr>\r\n", request.out);
             FCGX_PutS("<td id=\"polaris\">\r\n", request.out);
-            printAllInfantry(conn, request, "0", 0);
+            printAllInfantry(conn, request, "0", 0, 0);
             FCGX_PutS("</td><td id=\"protectorat\">\r\n", request.out);
-            printAllInfantry(conn, request, "0", 1);
+            printAllInfantry(conn, request, "0", 1, 0);
             FCGX_PutS("</td></tr></table>\r\n", request.out);
             /*char* sflag = getCookie("isEmptyMachines", request);
             int flag;
@@ -848,6 +917,22 @@ Content-type: text/html\r\n\
 \r\n\
 error", request.out);
             }
+            FCGX_PutS("//logs//", request.out);
+            char* query = malloc(300);
+            strcpy(query, "select Название from warmachine where id=");
+            char* sid = malloc(5);
+            sprintf(sid, "%d", machines[atoi(num)].id);
+            strcat(query, sid);
+            strcat(query, ";");
+            PGresult *res = PQexec(conn, query);
+            if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+                printf("No data retrieved\n");        
+                PQclear(res);
+                do_exit(conn);
+            }
+            FCGX_PutS(PQgetvalue(res, 0, 0), request.out);
+            free(query);
+            PQclear(res);
             free(machines);
             /*for (int i = 0; i < 20; i++) {
                 printf("i:%d;id:%d;strength:%d;ammunition:%d;speed:%d;\n", i, machines[i].id, machines[i].strength, machines[i].ammunition, machines[i].speed);
@@ -1449,46 +1534,23 @@ Set-Cookie: firstTime=0\r\n\
 <title>Бронепехота</title>\r\n\
 </head>\r\n\
 <body style=\"background: url(background.jpg) no-repeat; background-size: 100% 100vh; background-attachment: fixed;\">\r\n\
-<p style=\"text-align: center; color: white; font-size: 20;\">Выберите участвующие в сражении машины</p>\r\n\
+<p style=\"text-align: center; color: white; font-size: 20;\">Выберите участвующих в сражении юнитов</p>\r\n\
+<div style=\"text-align: center;\">Лимит:<input id=\"limit\"></div>\r\n\
             ", request.out);
-            printAllWarMachines(conn, request, "0");
+            FCGX_PutS("<div id=\"polaris\">", request.out);
+            printAllInfantry(conn, request, "0", 0, 1);
+            printAllWarMachines(conn, request, "0", 0);
+            FCGX_PutS("<p id=\"polaris-money\" style=\"text-align: center; font-size: 20;\">0</p>", request.out);
+            FCGX_PutS("</div>", request.out);
+            FCGX_PutS("<hr align=\"center\" width=\"400\" size=\"5\" color=\"Black\" />", request.out);
+            FCGX_PutS("<div id=\"protectorat\" style=\"text-align: center; font-size: 20;\">", request.out);
+            printAllInfantry(conn, request, "0", 1, 1);
+            printAllWarMachines(conn, request, "0", 1);
+            FCGX_PutS("<p id=\"protectorat-money\">0</p>", request.out);
+            FCGX_PutS("</div>", request.out);
             FCGX_PutS("\
 <div style=\"text-align: center;\"><button id=\"setmachines\">Ок</button></div>\r\n\
-<script>\r\n\
-var t = document.getElementsByTagName(\'input\');\r\n\
-for (var i = 0; i < t.length; i++) {\r\n\
-    t[i].value = \"0\";\r\n\
-}\r\n\
-function xhrSend (s) {\r\n\
-    var xhr = new XMLHttpRequest();\r\n\
-    xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
-    xhr.send(s);\r\n\
-    xhr.onreadystatechange = function() {\r\n\
-        if (xhr.readyState == XMLHttpRequest.DONE) {\r\n\
-            document.open();\r\n\
-            document.write(xhr.responseText);\r\n\
-            document.close();\r\n\
-        }\r\n\
-    }\r\n\
-}\r\n\
-document.getElementsByTagName(\'button\')[0].addEventListener(\"click\", clickButton);\r\n\
-function clickButton() {\r\n\
-    var inputs = document.getElementsByTagName(\'input\');\r\n\
-    var req = \"fillarraymachines:\";\r\n\
-    for (var i = 0; i < inputs.length; i++) {\r\n\
-        if (i != inputs.length - 1) {\r\n\
-            req += inputs[i].parentNode.id + \"=\" + inputs[i].value + \",\";\r\n\
-        }\r\n\
-        else {\r\n\
-            req += inputs[i].parentNode.id + \"=\" + inputs[i].value + \";\";\r\n\
-        }\r\n\
-    }\r\n\
-    var xhr = new XMLHttpRequest();\r\n\
-    xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
-    xhr.send(req);\r\n\
-    xhrSend(\"menu\");\r\n\
-}\r\n\
-</script>\r\n\
+<script src=\"http://localhost/setmachines.js\"></script>\r\n\
 </body>\r\n\
 </html>\r\n\
             ", request.out);
@@ -1871,11 +1933,28 @@ Set-Cookie: object-machines=\
             FCGX_PutS("\r\n", request.out);
             free(machines);
         }
-        else if (strstr(buf, "newgame")) {
+        /*else if (strstr(buf, "newgame")) {
             FCGX_PutS("\
 Content-type: text/html\r\n\
             ", request.out);
-        }
+        }*/
+        /*else if (strstr(buf, "getammomachine")) {
+            machine * machines = getMachines(request);
+            char* query = malloc(300);
+            strcpy(query, "select Название from warmachine where id=");
+            strcat
+            PGresult *res = PQexec(conn, query);
+            if (PQresultStatus(res) != PGRES_TUPLES_OK) {
+                printf("No data retrieved\n");        
+                PQclear(res);
+                do_exit(conn);
+            }
+            free(query);
+            PQclear(res);
+            FCGX_PutS("\
+Content-type: text/html\r\n\
+\r\n", request.out);
+        }*/
         else if (strstr(buf, "showlogs")) {
             FCGX_PutS("\
 Content-type: text/html\r\n\
@@ -1889,8 +1968,15 @@ Content-type: text/html\r\n\
 <body style=\"background: url(background.jpg) no-repeat; background-size: 100% 100vh; background-attachment: fixed;\">\r\n\
 <div id=\"logs\">\r\n\
 </div>\r\n\
+<div style=\"text-align: center;\"><button id=\"undo\">Отмена предыдущего действия</button></div>\r\n\
+<br>\r\n\
 <div style=\"text-align: center;\"><button id=\"ok\">Ок</button></div>\r\n\
 <script>\r\n\
+    function getCookie(name) {\r\n\
+      var value = \"; \" + document.cookie;\r\n\
+      var parts = value.split(\"; \" + name + \"=\");\r\n\
+      if (parts.length == 2) return parts.pop().split(\";\").shift();\r\n\
+    }\r\n\
     function xhrSend (s) {\r\n\
         var xhr = new XMLHttpRequest();\r\n\
         xhr.open(\'POST\', \'http://localhost/\', true);\r\n\
@@ -1910,8 +1996,39 @@ Content-type: text/html\r\n\
         document.getElementById(\"logs\").innerHTML = \"Здесь будет ваша история битвы\";\r\n\
     }\r\n\
     document.getElementById(\"ok\").addEventListener(\"click\", okButtonListener);\r\n\
+    document.getElementById(\"undo\").addEventListener(\"click\", restoreCookiesEventListener);\r\n\
     function okButtonListener() {\r\n\
         xhrSend(\"menu\");\r\n\
+    }\r\n\
+    function restoreCookiesEventListener() {\r\n\
+        if (getCookie(\"object-machines\") == \"{ }\") {\r\n\
+            if (document.getElementById(\"logs\").lastChild.lastChild.innerHTML != \"Отменено\") {\r\n\
+                var p = document.createElement(\"p\");\r\n\
+                p.innerHTML = \"Отменено\";\r\n\
+                p.style = \"color: red;\";\r\n\
+                document.getElementById(\"logs\").lastChild.appendChild(p);\r\n\
+                localStorage.setItem(\"logs\", document.getElementById(\"logs\").innerHTML);\r\n\
+            }\r\n\
+            else {\r\n\
+                alert(\"Уже отменено!\");\r\n\
+            }\r\n\
+        }\r\n\
+        else {\r\n\
+            if (getCookie(\"old-object-machines\")) {\r\n\
+                document.cookie = \"object-machines = \" + getCookie(\"old-object-machines\");\r\n\
+                document.cookie = \"size-object-machines = \" + getCookie(\"old-size-object-machines\");\r\n\
+                document.cookie = \"old-object-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+                document.cookie = \"old-size-object-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+                var p = document.createElement(\"p\");\r\n\
+                p.innerHTML = \"Отменено\";\r\n\
+                p.style = \"color: red;\";\r\n\
+                document.getElementById(\"logs\").lastChild.appendChild(p);\r\n\
+                localStorage.setItem(\"logs\", document.getElementById(\"logs\").innerHTML);\r\n\
+            }\r\n\
+            else {\r\n\
+                alert(\"Уже отменено!\");\r\n\
+            }\r\n\
+        }\r\n\
     }\r\n\
 </script>\r\n\
 </body>\r\n\
@@ -1993,6 +2110,11 @@ Content-type: text/html\r\n\
             document.cookie = \"isEmptyMachines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
             document.cookie = \"object-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
             document.cookie = \"size-object-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+            document.cookie = \"infantry = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+            document.cookie = \"side = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+            document.cookie = \"old-object-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+            document.cookie = \"old-size-object-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+            localStorage.removeItem(\'logs\');\r\n\
             window.location.reload(false);\r\n\
         }\r\n\
     }\r\n\
