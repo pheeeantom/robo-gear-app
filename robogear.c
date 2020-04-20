@@ -111,36 +111,126 @@ char* getCookie(char* name, FCGX_Request request) {
     }
 }*/
 
-machine * getMachines(FCGX_Request request) {
+char * createJsonPolarisMachines(int * polarisMachines, int size, FCGX_Request request) {
+    struct json_object *array;
+    array = json_object_new_array();
+    for (int i = 0; i < size; i++) {
+        json_object_array_add(array, json_object_new_int(polarisMachines[i]));
+    }
+    char* response = malloc(100);
+    strcpy(response, json_object_to_json_string(array));
+    return response;
+}
+
+char * createJsonProtectoratMachines(int * protectoratMachines, int size, FCGX_Request request) {
+    struct json_object *array;
+    array = json_object_new_array();
+    for (int i = 0; i < size; i++) {
+        json_object_array_add(array, json_object_new_int(protectoratMachines[i]));
+    }
+    char* response = malloc(100);
+    strcpy(response, json_object_to_json_string(array));
+    return response;
+}
+
+int * getPolarisMachines(FCGX_Request request) {
+    if (getCookie("polaris-machines", request)) {
+        int size = atoi(getCookie("size-polaris-machines", request));
+        int* response = malloc(size * sizeof(int));
+        struct json_object* obj = json_tokener_parse(getCookie("polaris-machines", request));
+        for (int i = 0; i < json_object_array_length(obj); i++) {
+            struct json_object* tmp = json_object_array_get_idx(obj, i);
+            response[i] = atoi(json_object_to_json_string(tmp));
+        }
+        return response;
+    }
+    else {
+        return NULL;
+    }
+}
+
+int * getProtectoratMachines(FCGX_Request request) {
+    if (getCookie("protectorat-machines", request)) {
+        int size = atoi(getCookie("size-protectorat-machines", request));
+        int* response = malloc(size * sizeof(int));
+        struct json_object* obj = json_tokener_parse(getCookie("protectorat-machines", request));
+        for (int i = 0; i < json_object_array_length(obj); i++) {
+            struct json_object* tmp = json_object_array_get_idx(obj, i);
+            response[i] = atoi(json_object_to_json_string(tmp));
+        }
+        return response;
+    }
+    else {
+        return NULL;
+    }
+}
+
+machine * getMachines(FCGX_Request request, int side) {
+    int* nums;
+    if (side == 0) {
+        nums = getPolarisMachines(request);
+    }
+    else if (side == 1) {
+        nums = getProtectoratMachines(request);
+    }
     if (getCookie("object-machines", request) && strcmp(getCookie("object-machines", request), "{ }")) {
         struct json_object* obj = json_tokener_parse(getCookie("object-machines", request));
-        char* size = getCookie("size-object-machines", request);
-        machine* response = (machine*)malloc(atoi(size) * sizeof(machine));
+        machine* response;
+        char* size;
+        if (side == 2) {
+            size = getCookie("size-object-machines", request);
+            response = (machine*)malloc(atoi(size) * sizeof(machine));
+        }
+        else if (side == 0) {
+            size = getCookie("size-polaris-machines", request);
+            response = (machine*)malloc(atoi(size) * sizeof(machine));
+        }
+        else if (side == 1) {
+            size = getCookie("size-protectorat-machines", request);
+            response = (machine*)malloc(atoi(size) * sizeof(machine));
+        }
         int num = 0;
+        int num2 = 0;
         json_object_object_foreach(obj, key, val) {
-            for (int i = 0; i < json_object_array_length(val); i++) {
-                struct json_object* tmp = json_object_array_get_idx(val, i);
-                //printf("key = %s, arr[%d] = %s\n", key, i, json_object_to_json_string(tmp));
-                switch (i) {
-                    case 0:
-                        response[num].id = atoi(json_object_to_json_string(tmp));
-                        break;
-                    case 1:
-                        response[num].ammunition= atoi(json_object_to_json_string(tmp));
-                        break;
-                    case 2:
-                        response[num].strength = atoi(json_object_to_json_string(tmp));
-                        break;
-                    case 3:
-                        response[num].speed = atoi(json_object_to_json_string(tmp));
-                        break;
+            int flag = 0;
+            if (side == 0 || side == 1) {
+                for (int i = 0; i < atoi(size); i++) {
+                    if (atoi(key + 3) == nums[i]) {
+                        flag = 1;
+                        //printf("%d", nums[i]);
+                    }
                 }
             }
-            num++;
+            else if (side == 2) {
+                flag = 1;
+            }
+            //flag = 1;
+            if (flag) {
+                for (int i = 0; i < json_object_array_length(val); i++) {
+                    struct json_object* tmp = json_object_array_get_idx(val, i);
+                    //printf("key = %s, arr[%d] = %s\n", key, i, json_object_to_json_string(tmp));
+                    switch (i) {
+                        case 0:
+                            response[num].id = atoi(json_object_to_json_string(tmp));
+                            break;
+                        case 1:
+                            response[num].ammunition= atoi(json_object_to_json_string(tmp));
+                            break;
+                        case 2:
+                            response[num].strength = atoi(json_object_to_json_string(tmp));
+                            break;
+                        case 3:
+                            response[num].speed = atoi(json_object_to_json_string(tmp));
+                            break;
+                    }
+                }
+                num++;
+            }
         }
         /*for (int i = 0; i < atoi(size); i++) {
             printf("obj:%d;id:%d;ammunition:%d;strength:%d;speed:%d\n", i, response[i].id, response[i].ammunition, response[i].strength, response[i].speed);
         }*/
+        //printf("\n");
         return response;
     }
     else {
@@ -170,6 +260,7 @@ char * getInfantry(FCGX_Request request) {
 char* createJsonMachines(machine* machines, FCGX_Request request) {
     struct json_object *obj, *array;
     obj = json_object_new_object();
+    int num = 0;
     for (int i = 0; i < atoi(getCookie("size-object-machines", request)); i++) {
         if (machines[i].id != 0) {
             array = json_object_new_array();
@@ -181,10 +272,11 @@ char* createJsonMachines(machine* machines, FCGX_Request request) {
             result[0] = 0;
             strcat(result, "obj");
             char* temp = malloc(5);
-            sprintf(temp, "%d", i);
+            sprintf(temp, "%d", num);
             strcat(result, temp);
             result[strlen(result) + strlen(temp)] = 0;
             json_object_object_add(obj, result, array);
+            num++;
         }
     }
     char* response = malloc(500);//увеличить если что
@@ -449,7 +541,7 @@ void printAllWarMachines(PGconn *conn, FCGX_Request request, char* offset, int s
     else {
         strcat(query, "Империя Полярис");
     }
-    strcat(query, "\' offset ");
+    strcat(query, "\' OR Сторона=\'Нейтральный\' offset ");
     strcat(query, offset);
     strcat(query, " limit ");
     strcat(query, LIMIT);
@@ -481,6 +573,12 @@ void printAllWarMachines(PGconn *conn, FCGX_Request request, char* offset, int s
         for (; counter < oldcounter + k; counter++) {
             FCGX_PutS("<td id=\"", request.out);
             FCGX_PutS(PQgetvalue(res, counter, 10), request.out);
+            if (!strcmp(PQgetvalue(res, counter, 1), "Нейтральный")) {
+                FCGX_PutS("-", request.out);
+                char* sside = malloc(5);
+                sprintf(sside, "%d", side);
+                FCGX_PutS(sside, request.out);
+            }
             FCGX_PutS("\" data-cost=\"", request.out);
             FCGX_PutS(PQgetvalue(res, counter, 3), request.out);
             FCGX_PutS("\">", request.out);
@@ -510,7 +608,28 @@ void printObjectsMachines(PGconn *conn, FCGX_Request request, machine * machines
             nrows++;
         }
     }*/
-    int nrows = atoi(getCookie("size-object-machines", request));
+    int nrows;
+    int * iMachines;
+    if (side == 0) {
+        nrows = atoi(getCookie("size-polaris-machines", request));
+        iMachines = getPolarisMachines(request);
+    }
+    else {
+        nrows = atoi(getCookie("size-protectorat-machines", request));
+        iMachines = getProtectoratMachines(request);
+    }
+    int temp; // временная переменная для обмена элементов местами
+    // Сортировка массива пузырьком
+    for (int i = 0; i < nrows - 1; i++) {
+        for (int j = 0; j < nrows - i - 1; j++) {
+            if (iMachines[j] > iMachines[j + 1]) {
+                // меняем элементы местами
+                temp = iMachines[j];
+                iMachines[j] = iMachines[j + 1];
+                iMachines[j + 1] = temp;
+            }
+        }
+    }
     if (nrows != 0) {
         int row = 0;
         FCGX_PutS("<table border=\"0\" style=\"margin: auto;\">", request.out);
@@ -538,7 +657,7 @@ void printObjectsMachines(PGconn *conn, FCGX_Request request, machine * machines
             free(query);
             FCGX_PutS("<td id=\"obj", request.out);
             char * str = malloc(10);
-            sprintf(str, "%d", i);
+            sprintf(str, "%d", iMachines[i]);
             FCGX_PutS(str, request.out);
             if (!hasPlusMinus) {
                 if (side) {
@@ -570,6 +689,7 @@ void printObjectsMachines(PGconn *conn, FCGX_Request request, machine * machines
             FCGX_PutS("\" src=\"http://localhost/", request.out);
             FCGX_PutS(PQgetvalue(res, 0, 9), request.out);
             FCGX_PutS("\" width=\"266\" height=\"200\" alt=\"error\">", request.out);
+            FCGX_PutS("<img src=\"http://localhost/arrows.jpg\" width=\"20\" height=\"20\" style=\"display: none;\">", request.out);
             if (hasPlusMinus) {
                 FCGX_PutS("\
 <br>\r\n\
@@ -658,7 +778,7 @@ void printAllBlowUps(PGconn *conn, FCGX_Request request, char * offset) {
     PQclear(res);
 }
 
-int main(void) 
+int main(int argc, char *argv[]) 
 { 
     //инициализация библилиотеки 
     FCGX_Init(); 
@@ -805,17 +925,17 @@ Content-type: text/html\r\n\
             }*/
             int flag = atoi(getCookie("isEmptyMachines", request));
             if (!flag) {
-                machine* machines = getMachines(request);
+                //machine* machines = getMachines(request);
                 FCGX_PutS("<hr align=\"center\" width=\"400\" size=\"5\" color=\"Black\" />\r\n", request.out);
                 FCGX_PutS("<table style=\"margin: auto; border-spacing: 100px 0px;\">\r\n", request.out);
                 FCGX_PutS("<tr>\r\n", request.out);
                 FCGX_PutS("<td id=\"polaris-machines\">\r\n", request.out);
-                printObjectsMachines(conn, request, machines, 0, 0);
+                printObjectsMachines(conn, request, getMachines(request, 0), 0, 0);
                 FCGX_PutS("</td><td id=\"protectorat-machines\">\r\n", request.out);
-                printObjectsMachines(conn, request, machines, 0, 1);
+                printObjectsMachines(conn, request, getMachines(request, 1), 0, 1);
                 FCGX_PutS("</td></tr></table>\r\n", request.out);
                 //printAllLongRangeWeapons(conn, request, "0");
-                free(machines);
+                //free(machines);
             }
             FCGX_PutS("<hr align=\"center\" width=\"400\" size=\"5\" color=\"Black\" />\r\n", request.out);
             printAllBlowUps(conn, request, "0");
@@ -897,7 +1017,7 @@ function tdListener() {\r\n\
             char * num = malloc(5);
             strncpy(num, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
             num[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
-            machine* machines = getMachines(request);
+            machine* machines = getMachines(request, 2);
             if (machines[atoi(num)].ammunition > 0) {
                 machines[atoi(num)].ammunition -= 1;
                 FCGX_PutS("\
@@ -1127,7 +1247,7 @@ Content-type: text/plain\r\n\
 
 
         else if (strstr(buf, "logs:getattackerdefender")) {
-            machine* machines = getMachines(request);
+            machine* machines = getMachines(request, 2);
             char * query = malloc(300);
             char* idAttacker = getCookie("idAttacker", request);
             char* idTarget = getCookie("idTarget", request);
@@ -1149,17 +1269,17 @@ Content-type: text/plain\r\n\
             PGresult *res = PQexec(conn, query);
             char * response = malloc(250);
             if (strstr(idAttacker, "inf")) {
-                strcpy(response, "<div class=\"turn\"><p>Атакующий боец из отряда:");
+                strcpy(response, "<p>Атакующий боец из отряда:");
                 strcat(response, PQgetvalue(res, 0, 0));
                 strcat(response, ", под номером:");
                 strcat(response, PQgetvalue(res, 0, 1));
             }
             else if (strstr(idAttacker, "lrw")) {
-                strcpy(response, "<div class=\"turn\"><p>Атакующее орудие:");
+                strcpy(response, "<p>Атакующее орудие:");
                 strcat(response, PQgetvalue(res, 0, 0));
             }
             else if (strstr(idAttacker, "blu")) {
-                strcpy(response, "<div class=\"turn\"><p>Размер взрыва:");
+                strcpy(response, "<p>Размер взрыва:");
                 strcat(response, PQgetvalue(res, 0, 0));
             }
             //printf("%s", power);
@@ -1210,7 +1330,7 @@ Content-type: plain/text\r\n\
 
 
         else if (strstr(buf, "testshot:checkkill")) {
-            machine* machines = getMachines(request);
+            machine* machines = getMachines(request, 2);
             char * query = malloc(300);
             char* idAttacker = getCookie("idAttacker", request);
             char* idTarget = getCookie("idTarget", request);
@@ -1471,6 +1591,50 @@ Content-type: plain/text\r\n");
                         }
                     }
                     if (machines[atoi(idTarget + 3)].strength <= 0) {
+                        int * polarisMachines = getPolarisMachines(request);
+                        int * protectoratMachines = getProtectoratMachines(request);
+                        int sizePolarisMachines = atoi(getCookie("size-polaris-machines", request));
+                        int sizeProtectoratMachines = atoi(getCookie("size-protectorat-machines", request));
+                        int fixSizePolarisMachines = sizePolarisMachines;
+                        for (int z = 0; z < fixSizePolarisMachines; z++) {
+                            if (polarisMachines[z] == atoi(idTarget + 3)) {
+                                sizePolarisMachines--;
+                                int * tempPolarisMachines = malloc(sizePolarisMachines * sizeof(int));
+                                for (int x = 0; x < z; x++) {
+                                    tempPolarisMachines[x] = polarisMachines[x];
+                                }
+                                for (int x = z + 1; x < sizePolarisMachines + 1; x++) {
+                                    tempPolarisMachines[x - 1] = polarisMachines[x];
+                                }
+                                free(polarisMachines);
+                                polarisMachines = tempPolarisMachines;
+                            }
+                        }
+                        int fixSizeProtectoratMachines = sizeProtectoratMachines;
+                        for (int z = 0; z < fixSizeProtectoratMachines; z++) {
+                            if (protectoratMachines[z] == atoi(idTarget + 3)) {
+                                sizeProtectoratMachines--;
+                                int * tempProtectoratMachines = malloc(sizeProtectoratMachines * sizeof(int));
+                                for (int x = 0; x < z; x++) {
+                                    tempProtectoratMachines[x] = protectoratMachines[x];
+                                }
+                                for (int x = z + 1; x < sizeProtectoratMachines + 1; x++) {
+                                    tempProtectoratMachines[x - 1] = protectoratMachines[x];
+                                }
+                                free(protectoratMachines);
+                                protectoratMachines = tempProtectoratMachines;
+                            }
+                        }
+                        for (int z = 0; z < sizePolarisMachines; z++) {
+                            if (polarisMachines[z] > atoi(idTarget + 3)) {
+                                polarisMachines[z]--;
+                            }
+                        }
+                        for (int z = 0; z < sizeProtectoratMachines; z++) {
+                            if (protectoratMachines[z] > atoi(idTarget + 3)) {
+                                protectoratMachines[z]--;
+                            }
+                        }
                         machines[atoi(idTarget + 3)].id = 0;
                         strcat(tempHTML, "<p style=\"text-align: center; color: white; font-size: 20;\">Машина уничтожена</p>");
                         strcat(logs, "<p>Машина уничтожена</p>");
@@ -1480,12 +1644,29 @@ Content-type: plain/text\r\n");
                         if (size < 0) {
                             size = 0;
                         }
-                        if (size == 0) {
-                            strcat(tempHTML, "Set-Cookie: isEmptyMachines=1\r\n");
-                        }
                         char * ssize = malloc(5);
                         sprintf(ssize, "%d", size);
                         strcat(response, ssize);
+                        strcat(response, "\r\n");
+                        if (size == 0) {
+                            strcat(tempHTML, "Set-Cookie: isEmptyMachines=1\r\n");
+                        }
+                        strcat(response, "Set-Cookie: polaris-machines=");
+                        strcat(response, createJsonPolarisMachines(polarisMachines, sizePolarisMachines, request));
+                        strcat(response, "\r\n");
+                        strcat(response, "Set-Cookie: size-polaris-machines=");
+                        char * tempSize = malloc(5);
+                        sprintf(tempSize, "%d", sizePolarisMachines);
+                        strcat(response, tempSize);
+                        strcat(response, "\r\n");
+                        strcat(response, "Set-Cookie: protectorat-machines=");
+                        strcat(response, createJsonPolarisMachines(protectoratMachines, sizeProtectoratMachines, request));
+                        strcat(response, "\r\n");
+                        strcat(response, "Set-Cookie: size-protectorat-machines=");
+                        free(tempSize);
+                        tempSize = malloc(5);
+                        sprintf(tempSize, "%d", sizeProtectoratMachines);
+                        strcat(response, tempSize);
                         strcat(response, "\r\n");
                     }
                     strcat(response, "\
@@ -1565,6 +1746,10 @@ Set-Cookie: firstTime=0\r\n\
             }
             int index = 0;
             struct json_object *obj, *array;
+            struct json_object *polaris = json_object_new_array();
+            struct json_object *protectorat = json_object_new_array();
+            int sizePolaris = 0;
+            int sizeProtectorat = 0;
             obj = json_object_new_object();
             char* size = malloc(5);
             for (int i = 0; i < counter; i++) {
@@ -1572,6 +1757,16 @@ Set-Cookie: firstTime=0\r\n\
                 char * id = malloc(5);
                 strncpy(id, buf1, equalence - buf1);
                 id[equalence - buf1] = '\0';
+                char* side = malloc(5);
+                if (strchr(id, '-')) {
+                    strncpy(side, strchr(id, '-') + 1, strlen(id) - (strchr(id, '-') - id));
+                    side[strlen(id) - (strchr(id, '-') - id)] = 0;
+                    printf("side   %s\n", side);
+                    int temp = strchr(id, '-') - id;
+                    strncpy(id, id, temp);
+                    id[temp] = 0;
+                    printf("id   %s\n", id);
+                }
                 char * point = strchr(buf1, ',');
                 char * num = malloc(5);
                 if (point != NULL) {
@@ -1616,6 +1811,24 @@ Set-Cookie: firstTime=0\r\n\
                     strcat(key, size);
                     key[strlen(key) + strlen(size)] = 0;
                     json_object_object_add(obj, key, array);
+                    if (!strcmp(PQgetvalue(res, 0, 1), "Империя Полярис")) {
+                        json_object_array_add(polaris, json_object_new_int(i));
+                        sizePolaris++;
+                    }
+                    else if (!strcmp(PQgetvalue(res, 0, 1), "Торговый Протекторат")) {
+                        json_object_array_add(protectorat, json_object_new_int(i));
+                        sizeProtectorat++;
+                    }
+                    else if (!strcmp(PQgetvalue(res, 0, 1), "Нейтральный")) {
+                        if (atoi(side) == 0) {
+                            json_object_array_add(polaris, json_object_new_int(i));
+                            sizePolaris++;
+                        }
+                        else if (atoi(side) == 1) {
+                            json_object_array_add(protectorat, json_object_new_int(i));
+                            sizeProtectorat++;
+                        }
+                    }
                     PQclear(res);
                     free(query);
                     /*machines[i].id = iid;
@@ -1667,10 +1880,27 @@ Set-Cookie: object-machines=\
             }
             //printf("%s", json_object_to_json_string(obj));
             FCGX_PutS("\r\n",request.out);
+            FCGX_PutS("Set-Cookie: polaris-machines=", request.out);
+            FCGX_PutS(json_object_to_json_string(polaris), request.out);
+            FCGX_PutS("\r\n",request.out);
+            FCGX_PutS("Set-Cookie: size-polaris-machines=", request.out);
+            char* temp2 = malloc(5);
+            sprintf(temp2, "%d", sizePolaris);
+            FCGX_PutS(temp2, request.out);
+            free(temp2);
+            FCGX_PutS("\r\n",request.out);
+            FCGX_PutS("Set-Cookie: protectorat-machines=", request.out);
+            FCGX_PutS(json_object_to_json_string(protectorat), request.out);
+            FCGX_PutS("\r\n",request.out);
+            FCGX_PutS("Set-Cookie: size-protectorat-machines=", request.out);
+            temp2 = malloc(5);
+            sprintf(temp2, "%d", sizeProtectorat);
+            FCGX_PutS(temp2, request.out);
+            FCGX_PutS("\r\n",request.out);
             FCGX_PutS("\r\n",request.out);
         }
         else if (strstr(buf, "editvalues")) {
-            machine* machines = getMachines(request);
+            machine* machines = getMachines(request, 2);
             /*for (int i = 0; i < atoi(getCookie("size-object-machines", request)); i++) {
                 printf("obj:%d;id:%d;ammunition:%d;strength:%d;speed:%d\n", i, machines[i].id, machines[i].ammunition, machines[i].strength, machines[i].speed);
             }*/
@@ -1694,7 +1924,7 @@ Content-type: text/html\r\n\
             free(machines);
         }
         else if (strstr(buf, "plusstrength")) {
-            machine* machines = getMachines(request);
+            machine* machines = getMachines(request, 2);
             char * i = malloc(5);
             strncpy(i, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
             i[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
@@ -1774,7 +2004,7 @@ Set-Cookie: object-machines=\
             }*/
         }
         else if (strstr(buf, "minusstrength")) {
-            machine* machines = getMachines(request);
+            machine* machines = getMachines(request, 2);
             char * i = malloc(5);
             strncpy(i, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
             i[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
@@ -1879,7 +2109,7 @@ Set-Cookie: object-machines=\
             }*/
         }
         else if (strstr(buf, "plusammunition")) {
-            machine* machines = getMachines(request);
+            machine* machines = getMachines(request, 2);
             char * i = malloc(5);
             strncpy(i, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
             i[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
@@ -1912,7 +2142,7 @@ Set-Cookie: object-machines=\
             }*/
         }
         else if (strstr(buf, "minusammunition")) {
-            machine* machines = getMachines(request);
+            machine* machines = getMachines(request, 2);
             char * i = malloc(5);
             strncpy(i, strchr(buf, '=') + 4, strchr(buf, ';') - strchr(buf, '=') - 4);
             i[strchr(buf, ';') - strchr(buf, '=') - 4] = '\0';
@@ -2019,6 +2249,14 @@ Content-type: text/html\r\n\
                 document.cookie = \"size-object-machines = \" + getCookie(\"old-size-object-machines\");\r\n\
                 document.cookie = \"old-object-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
                 document.cookie = \"old-size-object-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+                document.cookie = \"polaris-machines = \" + getCookie(\"old-polaris-machines\");\r\n\
+                document.cookie = \"size-polaris-machines = \" + getCookie(\"old-size-polaris-machines\");\r\n\
+                document.cookie = \"old-polaris-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+                document.cookie = \"old-size-polaris-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+                document.cookie = \"protectorat-machines = \" + getCookie(\"old-protectorat-machines\");\r\n\
+                document.cookie = \"size-protectorat-machines = \" + getCookie(\"old-size-protectorat-machines\");\r\n\
+                document.cookie = \"old-protectorat-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
+                document.cookie = \"old-size-protectorat-machines = ; expires = Thu, 01 Jan 1970 00:00:00 GMT\";\r\n\
                 var p = document.createElement(\"p\");\r\n\
                 p.innerHTML = \"Отменено\";\r\n\
                 p.style = \"color: red;\";\r\n\

@@ -44,12 +44,22 @@ function yesButtonListener() {
     xhr0.open('POST', 'http://localhost/', true);
     xhr0.onload = function() {
         if (localStorage.getItem("logs")) {
-            localStorage.setItem("logs", localStorage.getItem("logs") + "Атакующая машина:" + delayedMachine);
-            localStorage.setItem("logs", localStorage.getItem("logs") + xhr0.response);
+            if (delayedMachine != "") {
+                localStorage.setItem("logs", localStorage.getItem("logs") + "<div class=\"turn\"><p>Атакующая машина:" + delayedMachine + "</p>");
+                localStorage.setItem("logs", localStorage.getItem("logs") + xhr0.response);
+            }
+            else {
+                localStorage.setItem("logs", localStorage.getItem("logs") + "<div class=\"turn\">" + xhr0.response);
+            }
         }
         else {
-            localStorage.setItem("logs", "Атакующая машина:" + delayedMachine);
-            localStorage.setItem("logs", localStorage.getItem("logs") + xhr0.response);
+            if (delayedMachine != "") {
+                localStorage.setItem("logs", "<div class=\"turn\"><p>Атакующая машина:" + delayedMachine + "</p>");
+                localStorage.setItem("logs", localStorage.getItem("logs") + xhr0.response);
+            }
+            else {
+                localStorage.setItem("logs", "<div class=\"turn\">" + xhr0.response);
+            }
         }
         localStorage.setItem("logs", localStorage.getItem("logs") + "<p>Тест на дальность пройден</p>");
         if (req.includes("lrw") && req2.includes("obj")) {
@@ -122,12 +132,22 @@ function yesnoKeyListener(e) {
     xhr0.open('POST', 'http://localhost/', true);
     xhr0.onload = function() {
         if (localStorage.getItem("logs")) {
-            localStorage.setItem("logs", localStorage.getItem("logs") + "Атакующая машина:" + delayedMachine);
-            localStorage.setItem("logs", localStorage.getItem("logs") + xhr0.response);
+            if (delayedMachine != "") {
+                localStorage.setItem("logs", localStorage.getItem("logs") + "<div class=\"turn\"><p>Атакующая машина:" + delayedMachine + "</p>");
+                localStorage.setItem("logs", localStorage.getItem("logs") + xhr0.response);
+            }
+            else {
+                localStorage.setItem("logs", localStorage.getItem("logs") + "<div class=\"turn\">" + xhr0.response);
+            }
         }
         else {
-            localStorage.setItem("logs", "Атакующая машина:" + delayedMachine);
-            localStorage.setItem("logs", localStorage.getItem("logs") + xhr0.response);
+            if (delayedMachine != "") {
+                localStorage.setItem("logs", "<div class=\"turn\"><p>Атакующая машина:" + delayedMachine + "</p>");
+                localStorage.setItem("logs", localStorage.getItem("logs") + xhr0.response);
+            }
+            else {
+                localStorage.setItem("logs", "<div class=\"turn\">" + xhr0.response);
+            }
         }
         localStorage.setItem("logs", localStorage.getItem("logs") + "<p>Тест на дальность пройден</p>");
         if (req.includes("lrw") && req2.includes("obj")) {

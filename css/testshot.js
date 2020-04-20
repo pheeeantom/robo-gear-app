@@ -50,9 +50,41 @@ else {
     sideIcon = "polaris";
     document.getElementById("icon").src = "http://localhost/polaris1.jpg";
 }
+setTimeout(() => { 
+    for (var i = 0; i < tdsm.length; i++) {
+        var posTop = tdsm[i].getBoundingClientRect().top + window.pageYOffset;
+        tdsm[i].getElementsByTagName('img')[1].style = "display: block; position: absolute; left: " + tdsm[i].getBoundingClientRect().left + "px; top: " + posTop + "px; z-index:999;";
+        tdsm[i].getElementsByTagName('img')[1].addEventListener("click", changeSideMachine);
+    }
+}, 100);
 var attackobj = "";
 var blu = false;
 var spoilerVisible = false;
+function changeSideMachine() {
+    var arrPolaris = JSON.parse(getCookie('polaris-machines'));
+    var arrProtectorat = JSON.parse(getCookie('protectorat-machines'));
+    if (this.parentNode.parentNode.parentNode.parentNode.parentNode.id == "polaris-machines") {
+        for (var i = 0; i < arrPolaris.length; i++) {
+            if (Number(this.parentNode.id.slice(3, this.parentNode.id.indexOf("-"))) == arrPolaris[i]) {
+                arrProtectorat.push(arrPolaris[i]);
+                arrPolaris.splice(i, 1);
+            }
+        }
+    }
+    else if (this.parentNode.parentNode.parentNode.parentNode.parentNode.id == "protectorat-machines") {
+        for (var i = 0; i < arrProtectorat.length; i++) {
+            if (Number(this.parentNode.id.slice(3, this.parentNode.id.indexOf("-"))) == arrProtectorat[i]) {
+                arrPolaris.push(arrProtectorat[i]);
+                arrProtectorat.splice(i, 1);
+            }
+        }
+    }
+    document.cookie = "polaris-machines = " + JSON.stringify(arrPolaris);
+    document.cookie = "size-polaris-machines = " + arrPolaris.length;
+    document.cookie = "protectorat-machines = " + JSON.stringify(arrProtectorat);
+    document.cookie = "size-protectorat-machines = " + arrProtectorat.length;
+    xhrSend("testshot:chooseattacker;")
+}
 function clearAll(th) {
     var side = th.parentNode.parentNode.parentNode;
     var sideTrs = side.children[0].children;
@@ -315,36 +347,53 @@ function getCheckKill() {
     xhr2.send(req2);
     xhr.onload = function() {
         xhr2.onload = function() {
-            var xhr3 = new XMLHttpRequest();
-            xhr3.open('POST', 'http://localhost/', true);
-            //xhr.responseType = 'Text';
-            xhr3.onload = function() {
-                var div = document.createElement("div");
-                div.innerHTML = xhr3.response;
-                document.body.appendChild(div);
-                document.getElementById("send").removeChild(document.getElementById("send").children[0]);
-                document.getElementById("send").parentNode.removeChild(document.getElementById("send"));
-                document.getElementById("menu").removeChild(document.getElementById("menu").children[0]);
-                document.getElementById("menu").parentNode.removeChild(document.getElementById("menu"));
-                tds = document.getElementsByClassName('unit');
-                for (var i = 0; i < tds.length; i++) {
-                    tds[i].removeEventListener("click", tdClickListener);
+            var xhr4 = new XMLHttpRequest();
+            xhr4.open('POST', 'http://localhost/', true);
+            xhr4.onload = function() {
+                if (localStorage.getItem("logs")) {
+                    localStorage.setItem("logs", localStorage.getItem("logs") + "<div class=\"turn\">" + xhr4.response);
                 }
-                tdsm = document.getElementsByClassName('machine');
-                for (var i = 0; i < tdsm.length; i++) {
-                    tdsm[i].removeEventListener("click", tdClickListener);
+                else {
+                    localStorage.setItem("logs", "<div class=\"turn\">" + xhr4.response);
                 }
-                tdsb = document.getElementsByClassName('blowup');
-                for (var i = 0; i < tdsb.length; i++) {
-                    tdsb[i].removeEventListener("click", tdClickListener);
+                var xhr3 = new XMLHttpRequest();
+                xhr3.open('POST', 'http://localhost/', true);
+                //xhr.responseType = 'Text';
+                xhr3.onload = function() {
+                    var div = document.createElement("div");
+                    div.innerHTML = xhr3.response.split("//logs//")[0];
+                    document.body.appendChild(div);
+                    document.getElementById("send").removeChild(document.getElementById("send").children[0]);
+                    document.getElementById("send").parentNode.removeChild(document.getElementById("send"));
+                    document.getElementById("menu").removeChild(document.getElementById("menu").children[0]);
+                    document.getElementById("menu").parentNode.removeChild(document.getElementById("menu"));
+                    tds = document.getElementsByClassName('unit');
+                    for (var i = 0; i < tds.length; i++) {
+                        tds[i].removeEventListener("click", tdClickListener);
+                    }
+                    tdsm = document.getElementsByClassName('machine');
+                    for (var i = 0; i < tdsm.length; i++) {
+                        tdsm[i].removeEventListener("click", tdClickListener);
+                    }
+                    tdsb = document.getElementsByClassName('blowup');
+                    for (var i = 0; i < tdsb.length; i++) {
+                        tdsb[i].removeEventListener("click", tdClickListener);
+                    }
+                    document.getElementById("icon").removeEventListener("click", changeSide);
+                    var s = document.createElement("script");
+                    s.src = "http://localhost/checkkill.js";
+                    document.head.appendChild(s);
+                    if (localStorage.getItem("logs")) {
+                        localStorage.setItem("logs", localStorage.getItem("logs") + xhr3.response.split("//logs//")[1] + "</div>");
+                    }
+                    else {
+                        localStorage.setItem("logs", xhr3.response.split("//logs//")[1] + "</div>");
+                    }
                 }
-                document.getElementById("icon").removeEventListener("click", changeSide);
-                var s = document.createElement("script");
-                s.src = "http://localhost/checkkill.js";
-                document.head.appendChild(s);
+                xhr3.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+                xhr3.send("testshot:checkkill;");
             }
-            xhr3.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-            xhr3.send("testshot:checkkill;");
+            xhr4.send("logs:getattackerdefender;");
         }
     }
 }
@@ -352,6 +401,10 @@ function createBackupCookies() {
     if (getCookie("object-machines") && getCookie("size-object-machines")) {
         document.cookie = "old-object-machines = " + getCookie("object-machines");
         document.cookie = "old-size-object-machines = " + getCookie("size-object-machines");
+        document.cookie = "old-polaris-machines = " + getCookie("polaris-machines");
+        document.cookie = "old-size-polaris-machines = " + getCookie("size-polaris-machines");
+        document.cookie = "old-protectorat-machines = " + getCookie("protectorat-machines");
+        document.cookie = "old-size-protectorat-machines = " + getCookie("size-protectorat-machines");
     }
 }
 function buttonClickListener() {
