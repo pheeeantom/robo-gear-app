@@ -406,6 +406,26 @@ void printAllInfantry(PGconn *conn, FCGX_Request request, char* offset, int side
             }
             FCGX_PutS("\" id=\"infs", request.out);
             FCGX_PutS(PQgetvalue(res, commonCounter, 12), request.out);
+            FCGX_PutS("\" data-num=\"", request.out);
+            char * num = malloc(2);
+            char * side = malloc(3);
+            char * dice = malloc(6);
+            strcpy(dice, PQgetvalue(res, commonCounter, 6));
+            //printf("%s\n", dice);
+            if (strcmp(dice, "-") != 0) {
+                strncpy(num, dice, strchr(dice, '\xD0') - dice);
+                num[strchr(dice, '\xD0') - dice] = '\0';
+                strncpy(side, strchr(dice, '\x94') + 1, strchr(dice, '\0') - strchr(dice, '\x94') - 1);
+                side[strchr(dice, '\0') - strchr(dice, '\x94') - 1] = '\0';
+                FCGX_PutS(num, request.out);
+                FCGX_PutS("\" data-side=\"", request.out);
+                FCGX_PutS(side, request.out);
+            }
+            else {
+                FCGX_PutS("0\" data-side=\"6", request.out);
+            }
+            FCGX_PutS("\" data-armor=\"", request.out);
+            FCGX_PutS(PQgetvalue(res, commonCounter, 9), request.out);
             FCGX_PutS("\">", request.out);
             //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
             //FCGX_PutS(PQgetvalue(res, i, 11), request.out);
@@ -515,6 +535,18 @@ void printLongRangeWeapons(PGconn *conn, FCGX_Request request, char* offset, mac
         FCGX_PutS("<tr>", request.out);
         FCGX_PutS("<td id=\"lrw", request.out);
         FCGX_PutS(PQgetvalue(res, commonCounter, 4), request.out);
+        FCGX_PutS("\" data-num=\"", request.out);
+        char * num = malloc(2);
+        char * side = malloc(3);
+        char * dice = malloc(6);
+        strcpy(dice, PQgetvalue(res, commonCounter, 2));
+        strncpy(num, dice, strchr(dice, '\xD0') - dice);
+        num[strchr(dice, '\xD0') - dice] = '\0';
+        strncpy(side, strchr(dice, '\x94') + 1, strchr(dice, '\0') - strchr(dice, '\x94') - 1);
+        side[strchr(dice, '\0') - strchr(dice, '\x94') - 1] = '\0';
+        FCGX_PutS(num, request.out);
+        FCGX_PutS("\" data-side=\"", request.out);
+        FCGX_PutS(side, request.out);
         FCGX_PutS("\">", request.out);
         //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
         //FCGX_PutS(PQgetvalue(res, i, 11), request.out);
@@ -669,7 +701,14 @@ void printObjectsMachines(PGconn *conn, FCGX_Request request, machine * machines
             }
             FCGX_PutS("\" class=\"obj", request.out);
             FCGX_PutS(idstr, request.out);
-            FCGX_PutS(" machine\">", request.out);
+            FCGX_PutS(" machine\" data-armor=\"", request.out);
+            char* armor = malloc(3);
+            char* fullArmor = malloc(10);
+            strcpy(fullArmor, PQgetvalue(res, 0, 7));
+            strncpy(armor, fullArmor, strchr(fullArmor, '-') - fullArmor);
+            armor[strchr(fullArmor, '-') - fullArmor] = '\0';
+            FCGX_PutS(armor, request.out);
+            FCGX_PutS("\">", request.out);
             FCGX_PutS("<img title=\"Скорострельность=", request.out);
             FCGX_PutS(PQgetvalue(res, 0, 5), request.out);
             FCGX_PutS(" Боезапас=", request.out);
@@ -761,7 +800,19 @@ void printAllBlowUps(PGconn *conn, FCGX_Request request, char * offset) {
         for (; counter < oldcounter + k; counter++) {
             FCGX_PutS("<td id=\"blu", request.out);
             FCGX_PutS(PQgetvalue(res, counter, 4), request.out);
-            FCGX_PutS("\" class=\"blowup\">", request.out);
+            FCGX_PutS("\" class=\"blowup\" data-num=\"", request.out);
+            char * num = malloc(2);
+            char * side = malloc(3);
+            char * dice = malloc(6);
+            strcpy(dice, PQgetvalue(res, counter, 1));
+            strncpy(num, dice, strchr(dice, '\xD0') - dice);
+            num[strchr(dice, '\xD0') - dice] = '\0';
+            strncpy(side, strchr(dice, '\x94') + 1, strchr(dice, '\0') - strchr(dice, '\x94') - 1);
+            side[strchr(dice, '\0') - strchr(dice, '\x94') - 1] = '\0';
+            FCGX_PutS(num, request.out);
+            FCGX_PutS("\" data-side=\"", request.out);
+            FCGX_PutS(side, request.out);
+            FCGX_PutS("\">", request.out);
             //FCGX_PutS("<img src=\"data:image/gif;base64,", request.out);
             //FCGX_PutS(PQgetvalue(res, i, 11), request.out);
             //FCGX_PutS("\" width=\"100\" height=\"100\" alt=\"error\">", request.out);
@@ -940,6 +991,7 @@ Content-type: text/html\r\n\
             FCGX_PutS("<hr align=\"center\" width=\"400\" size=\"5\" color=\"Black\" />\r\n", request.out);
             printAllBlowUps(conn, request, "0");
             FCGX_PutS("\
+<div style=\"text-align: center; padding-top: 35px;\" id=\"chance\">Вероятность пробития: ?</div>\r\n\
 <div style=\"text-align: center; padding-top: 35px;\" id=\"send\"><button>Отправить</button></div>\r\n\
 <div style=\"text-align: center; padding-top: 35px;\" id=\"menu\"><button>Меню</button></div>\r\n\
 </body>\r\n\

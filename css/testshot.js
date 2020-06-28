@@ -115,6 +115,22 @@ function clearAll(th) {
         }
     }
 }
+function computeChance() {
+    if (req && req2 && !spoilerVisible) {
+        var num = document.getElementById(id).dataset.num;
+        var side = document.getElementById(id).dataset.side;
+        var armor = document.getElementById(id2).dataset.armor;
+        var singleChance = (side - armor) / side;
+        if (singleChance > 1) {
+            singleChance = 1;
+        }
+        else if (singleChance < 0) {
+            singleChance = 0;
+        }
+        var chance = (1 - Math.pow(1 - singleChance, num)) * 100;
+        document.getElementById("chance").innerHTML = "Вероятность пробития: " + chance + "%";
+    }
+}
 function tdClickListener() {
     var allspoilers = document.getElementsByClassName("spoiler");
     for (var i = 0; i < allspoilers.length; i++) {
@@ -182,6 +198,7 @@ function tdClickListener() {
                     id2 = this.id;
                     req2 = "settarget=" + id2.slice(0, id2.indexOf("-")) + ";";
                     this.style = "border: 6px solid orange; border-radius: 5px;";
+                    computeChance();
                 }
             }
         }
@@ -197,6 +214,7 @@ function tdClickListener() {
             id2 = this.id;
             req2 = "settarget=" + id2.slice(0, id2.indexOf("-")) + ";";
             this.style = "border: 6px solid orange; border-radius: 5px;";
+            computeChance();
         }
         
     }
@@ -218,6 +236,7 @@ function tdClickListener() {
                 req2 = "";
                 id = "";
                 id2 = "";
+                document.getElementById("chance").innerHTML = "Вероятность пробития: ?";
             }
             else {
                 blu = true;
@@ -228,6 +247,7 @@ function tdClickListener() {
                 req = "setttacker=" + this.id + ";";
                 id = this.id;
                 this.style = "border: 3px solid orange; border-radius: 5px;";
+                computeChance();
             }
         }
         else {
@@ -245,6 +265,7 @@ function tdClickListener() {
             req2 = "";
             id2 = "";
             this.style = "border: 3px solid orange; border-radius: 5px;";
+            document.getElementById("chance").innerHTML = "Вероятность пробития: ?";
         }
     }
 }
@@ -284,6 +305,7 @@ function infsListener() {
         infs2.addEventListener("click", tdClickListener);
     }
     this.removeEventListener("click", infsListener);
+    computeChance();
 }
 function lrwListener() {
     id = this.id;
@@ -294,6 +316,7 @@ function lrwListener() {
     clearAll(document.getElementById(attackobj));
     document.getElementById(attackobj).style = "border: 6px solid orange; border-radius: 5px;";
     this.removeEventListener("click", lrwListener);
+    computeChance();
 };
 function getCompareDistance() {
     var xhr = new XMLHttpRequest();
@@ -488,4 +511,5 @@ function changeSide() {
         this.src = "http://localhost/polaris1.jpg";
         sideIcon = "polaris";
     }
+    document.getElementById("chance").innerHTML = "Вероятность пробития: ?";
 }
